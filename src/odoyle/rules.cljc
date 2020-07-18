@@ -54,7 +54,7 @@
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
-(defn- ->rule [[rule-name rule]]
+(defn- ->rule [rule-name rule]
   (let [{:keys [what-block when-block then-block]} rule
         conditions (mapv ->condition (:body what-block))
         callback `(fn [] ~@(:body then-block))]
@@ -96,12 +96,15 @@
 (defmacro ruleset [rules]
   (->> rules
        (parse ::rules)
-       (mapv ->rule)))
+       (reduce
+         (fn [m [rule-name rule]]
+           (assoc m rule-name (->rule rule-name rule)))
+         {})))
 
 (defn ->session [rules]
   (binding [*last-id* (atom -1)]
     (reduce
       add-rule
       (->Session (->AlphaNode (swap! *last-id* inc) nil nil []))
-      rules)))
+      (vals rules))))
 
