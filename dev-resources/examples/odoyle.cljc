@@ -17,17 +17,22 @@
       [::player ::y y]
       [::player ::health health]]}))
 
-(println rules)
-
-#_
 (def *session
   (-> (o/->session rules)
-      (o/insert ::player {::x 1 ::y 1 ::health 10})
-      (o/insert ::enemy {::x 1 ::y 1 ::health 10})
-      (o/insert ::enemy {::x 1 ::y 1 ::health 10})
-      (o/insert ::enemy {::x 2 ::y 2 ::health 10})
-      (o/insert ::enemy {::x 2 ::y 2 ::health 10})
+      ;(o/insert ::player {::x 1 ::y 1 ::health 10})
+      ;(o/insert ::enemy {::x 1 ::y 1 ::health 10})
+      ;(o/insert ::enemy {::x 1 ::y 1 ::health 10})
+      ;(o/insert ::enemy {::x 2 ::y 2 ::health 10})
+      ;(o/insert ::enemy {::x 2 ::y 2 ::health 10})
       atom))
+
+(defn print-node [node level]
+  (dotimes [_ level] (print "  "))
+  (println (dissoc node :children))
+  (doseq [child (:children node)]
+    (print-node child (inc level))))
+
+(print-node (:alpha-node @*session) 0)
 
 #_
 (println (o/query @*session ::get-player))

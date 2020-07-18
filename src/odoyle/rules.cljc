@@ -30,20 +30,23 @@
 (defrecord Var [field ;; :id, :attr, or :value
                 sym ;; symbol
                 ])
-(defrecord AlphaNode [test-field ;; :id, :attr, or :value
+(defrecord AlphaNode [id ;; int
+                      test-field ;; :id, :attr, or :value
                       test-value ;; anything
+                      children ;; vector of AlphaNode
                       ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       vars ;; vector of Var
                       ])
-(defrecord Production [conditions ;; vector of Condition
-                       ])
-(defrecord Session [])
+(defrecord Rule [conditions ;; vector of Condition
+                 callback ;; fn
+                 ])
+(defrecord Session [alpha-node])
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
     :binding (update condition :vars conj (->Var field value))
-    :value (update condition :nodes conj (->AlphaNode field value))))
+    :value (update condition :nodes conj (->AlphaNode nil field value []))))
 
 (defn- ->condition [{:keys [id attr value]}]
   (-> (->Condition [] [])
@@ -51,17 +54,54 @@
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
-(defn- ->production [[rule-name rule]]
+(defn- ->rule [[rule-name rule]]
   (let [{:keys [what-block when-block then-block]} rule
-        conditions (mapv ->condition (:body what-block))]
-    (->Production conditions)))
+        conditions (mapv ->condition (:body what-block))
+        callback `(fn [] ~@(:body then-block))]
+    (->Rule conditions callback)))
+
+(def ^:private ^:dynamic *last-id* nil)
+(def ^:private ^:dynamic *leaf-id* nil)
+
+(defn- add-node [node new-nodes]
+  (reset! *leaf-id* (:id node))
+  (let [[new-node & other-nodes] new-nodes]
+    (if new-node
+      (if-let [i (->> (:children node)
+                      (map-indexed vector)
+                      (some (fn [[i child]]
+                              (when (= (select-keys child [:test-field :test-value])
+                                       (select-keys new-node [:test-field :test-value]))
+                                i))))]
+        (update node :children update i add-node other-nodes)
+        (let [new-node (assoc new-node :id (swap! *last-id* inc))]
+          (update node :children conj (add-node new-node other-nodes))))
+      node)))
+
+(defn- add-nodes [session nodes]
+  (binding [*leaf-id* (atom -1)]
+    [(update session :alpha-node add-node nodes)
+     @*leaf-id*]))
+
+(defn- add-rule [session rule]
+  (reduce
+    (fn [session condition]
+      (let [[session leaf-id] (add-nodes session (:nodes condition))]
+        session))
+    session
+    (:conditions rule)))
 
 ;; public
 
 (defmacro ruleset [rules]
   (->> rules
        (parse ::rules)
-       (mapv ->production)))
+       (mapv ->rule)))
 
-(defn ->session [rules])
+(defn ->session [rules]
+  (binding [*last-id* (atom -1)]
+    (reduce
+      add-rule
+      (->Session (->AlphaNode (swap! *last-id* inc) nil nil []))
+      rules)))
 
