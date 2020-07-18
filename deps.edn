@@ -1,7 +1,7 @@
 {:paths ["src"]
  :deps {expound {:mvn/version "0.7.2"}}
- :aliases {:dev {:extra-deps {org.clojure/clojurescript {:mvn/version "1.10.764"}
-                              com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
+ :aliases {:dev {;:extra-deps {org.clojure/clojurescript {:mvn/version "1.10.764"}
+                 ;             com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
                  :extra-paths ["dev-resources"]
                  :main-opts ["dev.clj"]}
            :prod {:extra-deps {leiningen {:mvn/version "2.9.0"}}
