@@ -27,6 +27,11 @@
 
 ;; private
 
+(defrecord Fact [id attr value])
+(defrecord Token [fact ;; Fact
+                  kind ;; :insert, :retract, :update
+                  old-fact ;; only used when updating
+                  ])
 (defrecord Var [field ;; :id, :attr, or :value
                 sym ;; symbol
                 ])
@@ -35,6 +40,7 @@
                       test-value ;; anything
                       children ;; vector of AlphaNode
                       successors ;; vector of JoinNode
+                      facts ;; map of id -> (map of attr -> Fact)
                       ])
 (defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
                        child ;; JoinNode
@@ -55,12 +61,18 @@
                  ])
 (defrecord Session [root-node ;; AlphaNode
                     rule-fns ;; fns
+                    id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
     :binding (update condition :vars conj (->Var field value))
-    :value (update condition :nodes conj (->AlphaNode nil field value [] []))))
+    :value (update condition :nodes conj (map->AlphaNode {:path nil
+                                                          :test-field field
+                                                          :test-value value
+                                                          :children []
+                                                          :successors []
+                                                          :facts {}}))))
 
 (defn- ->condition [{:keys [id attr value]}]
   (-> {:vars [] :nodes []}
@@ -119,6 +131,41 @@
           #{(:path alpha-node)}
           (:children alpha-node))))))
 
+(defn- right-activation [session node-path token]
+  session)
+
+(defn- upsert-fact [session id attr value node-paths]
+  (let [id+attr [id attr]
+        fact (->Fact id attr value)]
+    (if-let [existing-node-paths (get-in session [:id-attr-nodes id+attr])]
+      (as-> session $
+            ;; retract any facts from nodes that the new fact wasn't inserted in
+            (reduce
+              (fn [session node-path]
+                (if (not (contains? node-paths node-path))
+                  (let [node (get-in session node-path)
+                        old-fact (get-in node [:facts id attr])]
+                    (assert old-fact)
+                    (right-activation session node-path (->Token old-fact :retract nil)))))
+              $
+              existing-node-paths)
+            ;; update or insert facts, depending on whether the node already exists
+            (reduce
+              (fn [session node-path]
+                (if (contains? existing-node-paths node-path)
+                  (let [node (get-in session node-path)
+                        old-fact (get-in node [:facts id attr])]
+                    (assert old-fact)
+                    (right-activation session node-path (->Token fact :update old-fact)))
+                  (right-activation session node-path (->Token fact :insert nil))))
+              $
+              node-paths))
+      (reduce
+        (fn [session node-path]
+          (right-activation session node-path (->Token fact :insert nil)))
+        session
+        node-paths))))
+
 ;; public
 
 (defn add-rule [session rule]
@@ -140,7 +187,14 @@
     (mapv ->rule (parse ::rules rules))))
 
 (defn ->session []
-  (->Session (->AlphaNode nil nil nil [] []) {}))
+  (->Session (map->AlphaNode {:path nil
+                              :test-field nil
+                              :test-value nil
+                              :children []
+                              :successors []
+                              :facts {}})
+             {}
+             {}))
 
 (defn insert
   ([session id attr->value]
@@ -148,8 +202,8 @@
                 (insert session id attr value))
               session attr->value))
   ([session id attr value]
-   (let [nodes (get-alpha-nodes-for-fact session (:root-node session) id attr value true)]
-     session)))
+   (->> (get-alpha-nodes-for-fact session (:root-node session) id attr value true)
+        (upsert-fact session id attr value))))
 
 (defn retract! [fact])
 
