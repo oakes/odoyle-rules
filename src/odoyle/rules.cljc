@@ -86,21 +86,19 @@
           (update node :children conj (add-alpha-node new-node other-nodes *alpha-node-path))))
       node)))
 
+(defn- add-condition [session condition]
+  (let [*alpha-node-path (volatile! [])
+        session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
+        alpha-node-path @*alpha-node-path
+        successor-count (count (get-in (:alpha-node session) (conj alpha-node-path :successors)))
+        join-node-path (conj alpha-node-path :successors successor-count)
+        mem-node-path (conj join-node-path :child)
+        mem-node (->MemoryNode mem-node-path nil)
+        join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
+    (update session :alpha-node update-in alpha-node-path update :successors conj join-node)))
+
 (defn- add-rule [session rule]
-  (loop [session session
-         conditions (:conditions rule)
-         mem-node-path []]
-    (if-let [condition (first conditions)]
-      (let [*alpha-node-path (volatile! [])
-            session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
-            alpha-node-path @*alpha-node-path
-            join-node-path (conj mem-node-path :child)
-            mem-node-path (conj join-node-path :child)
-            mem-node (->MemoryNode mem-node-path nil)
-            join-node (->JoinNode join-node-path mem-node alpha-node-path condition)
-            session (update session :alpha-node update-in alpha-node-path update :successors conj join-node)]
-        (recur session (rest conditions) mem-node-path))
-      session)))
+  (reduce add-condition session (:conditions rule)))
 
 ;; public
 
