@@ -69,9 +69,7 @@
         callback `(fn [] ~@(:body then-block))]
     (->Rule conditions callback)))
 
-(def ^:private ^:dynamic *alpha-node-path* nil)
-
-(defn- add-alpha-node [node new-nodes]
+(defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]
     (if new-node
       (if-let [i (->> (:children node)
@@ -81,11 +79,11 @@
                                        (select-keys new-node [:test-field :test-value]))
                                 i))))]
         (do
-          (swap! *alpha-node-path* conj :children i)
-          (update node :children update i add-alpha-node other-nodes))
+          (vswap! *alpha-node-path conj :children i)
+          (update node :children update i add-alpha-node other-nodes *alpha-node-path))
         (do
-          (swap! *alpha-node-path* conj :children (-> node :children count))
-          (update node :children conj (add-alpha-node new-node other-nodes))))
+          (vswap! *alpha-node-path conj :children (-> node :children count))
+          (update node :children conj (add-alpha-node new-node other-nodes *alpha-node-path))))
       node)))
 
 (defn- add-rule [session rule]
@@ -93,11 +91,9 @@
          conditions (:conditions rule)
          mem-node-path []]
     (if-let [condition (first conditions)]
-      (let [[session
-             alpha-node-path]
-            (binding [*alpha-node-path* (atom [])]
-              [(update session :alpha-node add-alpha-node (:nodes condition))
-               @*alpha-node-path*])
+      (let [*alpha-node-path (volatile! [])
+            session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
+            alpha-node-path @*alpha-node-path
             join-node-path (conj mem-node-path :child)
             mem-node-path (conj join-node-path :child)
             mem-node (->MemoryNode mem-node-path nil)
