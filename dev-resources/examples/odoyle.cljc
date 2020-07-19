@@ -18,7 +18,7 @@
       [::player ::health health]]}))
 
 (def *session
-  (-> (o/->session rules)
+  (-> (reduce o/add-rule (o/->session) rules)
       ;(o/insert ::player {::x 1 ::y 1 ::health 10})
       ;(o/insert ::enemy {::x 1 ::y 1 ::health 10})
       ;(o/insert ::enemy {::x 1 ::y 1 ::health 10})

@@ -37,6 +37,7 @@
                       ])
 (defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
                        child ;; JoinNode
+                       rule-name ;; keyword
                        ])
 (defrecord JoinNode [path ;; the get-in vector to reach this node from the root
                      child ;; MemoryNode
@@ -45,11 +46,14 @@
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       vars ;; vector of Var
+                      rule-name ;; keyword
                       ])
-(defrecord Rule [conditions ;; vector of Condition
+(defrecord Rule [name ;; keyword
+                 conditions ;; vector of Condition
                  callback ;; fn
                  ])
 (defrecord Session [root-node ;; AlphaNode
+                    callbacks ;; fns
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -58,16 +62,15 @@
     :value (update condition :nodes conj (->AlphaNode field value [] []))))
 
 (defn- ->condition [{:keys [id attr value]}]
-  (-> (->Condition [] [])
+  (-> {:vars [] :nodes []}
       (add-to-condition :id id)
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
-(defn- ->rule [rule-name rule]
+(defn- ->rule [[rule-name rule]]
   (let [{:keys [what-block when-block then-block]} rule
-        conditions (mapv ->condition (:body what-block))
-        callback `(fn [] ~@(:body then-block))]
-    (->Rule conditions callback)))
+        conditions (mapv ->condition (:body what-block))]
+    [rule-name conditions (:body then-block)]))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]
@@ -93,26 +96,29 @@
         successor-count (count (get-in (:root-node session) (conj alpha-node-path :successors)))
         join-node-path (conj alpha-node-path :successors successor-count)
         mem-node-path (conj join-node-path :child)
-        mem-node (->MemoryNode mem-node-path nil)
+        mem-node (->MemoryNode mem-node-path nil (:rule-name condition))
         join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
     (update session :root-node update-in alpha-node-path update :successors conj join-node)))
 
-(defn- add-rule [session rule]
-  (reduce add-condition session (:conditions rule)))
-
 ;; public
 
-(defmacro ruleset [rules]
-  (->> rules
-       (parse ::rules)
-       (reduce
-         (fn [m [rule-name rule]]
-           (assoc m rule-name (->rule rule-name rule)))
-         {})))
+(defn add-rule [session rule]
+  (let [conditions (:conditions rule)
+        conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))]
+    (-> (reduce add-condition session conditions)
+        (assoc-in [:callbacks (:name rule)] (:callback rule)))))
 
-(defn ->session [rules]
+(defmacro ruleset [rules]
   (reduce
-    add-rule
-    (->Session (->AlphaNode nil nil [] []))
-    (vals rules)))
+    (fn [v [rule-name conditions fn-body]]
+      (conj v `(->Rule ~rule-name
+                       (mapv map->Condition ~conditions)
+                       (fn [] ~@fn-body))))
+    []
+    (mapv ->rule (parse ::rules rules))))
+
+(defn ->session []
+  (->Session (->AlphaNode nil nil [] []) {}))
+
+(defn retract! [fact])
 
