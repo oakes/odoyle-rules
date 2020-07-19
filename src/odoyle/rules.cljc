@@ -157,8 +157,22 @@
         v2 (subvec v (inc index))]
     (into (into [] v1) v2)))
 
-(defn- left-activate-join-node [session node vars token]
-  session)
+(declare left-activate-memory-node)
+
+(defn- left-activate-join-node [session node-path vars token]
+  (let [join-node (get-in session node-path)
+        alpha-node (get-in session (:alpha-node-path join-node))]
+    (reduce
+      (fn [session attr->fact]
+        (reduce
+          (fn [session alpha-fact]
+            (if-let [new-vars (perform-join-tests join-node vars alpha-fact)]
+              (left-activate-memory-node session (-> join-node :child :path) new-vars (assoc token :fact alpha-fact))
+              session))
+          session
+          (vals attr->fact)))
+      session
+      (vals (:facts alpha-node)))))
 
 (defn- left-activate-memory-node [session node-path vars token]
   (let [{:keys [id attr] :as fact} (:fact token)
