@@ -450,11 +450,19 @@
         (upsert-fact session id attr value)
         trigger-then-blocks)))
 
+(s/fdef query-all
+  :args (s/cat :session ::session
+               :rule-name qualified-keyword?))
+
 (defn query-all [session rule-name]
   (let [rule-id (or (get-in session [:rule-ids rule-name])
                       (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
     (:vars rule)))
+
+(s/fdef query
+  :args (s/cat :session ::session
+               :rule-name qualified-keyword?))
 
 (defn query [session rule-name]
   (last (query-all session rule-name)))

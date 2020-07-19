@@ -25,7 +25,8 @@
       (o/insert ::thomas ::height 72)
       (o/insert ::george ::height 72)
       ((fn [session]
-         (is (= 3 (count (o/query-all session ::num-conds-and-facts))))))))
+         (is (= 3 (count (o/query-all session ::num-conds-and-facts))))
+         session))))
 
 (deftest adding-facts-out-of-order
   (-> (reduce o/add-rule (o/->session)
@@ -58,7 +59,8 @@
       (o/insert ::alice ::left-of ::david)
       (o/insert ::david ::color "white")
       ((fn [session]
-         (is (= 1 (count (o/query-all session ::out-of-order))))))))
+         (is (= 1 (count (o/query-all session ::out-of-order))))
+         session))))
 
 (deftest duplicate-facts
   (-> (reduce o/add-rule (o/->session)
@@ -71,5 +73,12 @@
       (o/insert ::bob ::self ::bob)
       (o/insert ::bob ::color "red")
       ((fn [session]
-         (is (= 1 (count (o/query-all session ::duplicate-facts))))))))
+         (is (= 1 (count (o/query-all session ::duplicate-facts))))
+         (is (= "red" (:c (o/query session ::duplicate-facts))))
+         session))
+      (o/insert ::bob ::color "green")
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::duplicate-facts))))
+         (is (= "green" (:c (o/query session ::duplicate-facts))))
+         session))))
 
