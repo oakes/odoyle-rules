@@ -73,6 +73,7 @@
                  ])
 (defrecord Session [root-node ;; AlphaNode
                     rule-fns ;; fns
+                    rule-paths ;; map of rule name -> the get-in vector to reach the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-nodes ;; set of MemoryNode paths that need executed
                     ])
@@ -362,12 +363,14 @@
 (defn add-rule [session rule]
   (let [conditions (:conditions rule)
         conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))
-        rule-path [:rule-fns (:name rule)]]
-    (when (get-in session rule-path)
+        rule-fn-path [:rule-fns (:name rule)]
+        session (reduce add-condition session conditions)]
+    (when (get-in session rule-fn-path)
       (throw (ex-info (str (:name rule) " already exists in session") {})))
-    (-> (reduce add-condition session conditions)
-        (dissoc :mem-node-path) ;; added temporarily by add-condition
-        (assoc-in rule-path (:rule-fn rule)))))
+    (-> session
+        (assoc-in [:rule-paths (:name rule)] (:mem-node-path session))
+        (dissoc :mem-node-path) ;; assoc'ed by add-condition
+        (assoc-in rule-fn-path (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
   (reduce
@@ -379,15 +382,17 @@
     (mapv ->rule (parse ::rules rules))))
 
 (defn ->session []
-  (->Session (map->AlphaNode {:path nil
-                              :test-field nil
-                              :test-value nil
-                              :children []
-                              :successors []
-                              :facts {}})
-             {}
-             {}
-             #{}))
+  (map->Session
+    {:root-node (map->AlphaNode {:path nil
+                                 :test-field nil
+                                 :test-value nil
+                                 :children []
+                                 :successors []
+                                 :facts {}})
+     :rule-fns {}
+     :rule-paths {}
+     :id-attr-nodes {}
+     :then-nodes #{}}))
 
 (s/def ::session #(instance? Session %))
 
@@ -420,4 +425,13 @@
    (->> (get-alpha-nodes-for-fact session (:root-node session) id attr value true)
         (upsert-fact session id attr value)
         trigger-then-blocks)))
+
+(defn query-all [session rule-name]
+  (let [rule-path (or (get-in session [:rule-paths rule-name])
+                      (throw (ex-info (str rule-name " not in session") {})))
+        rule (get-in session rule-path)]
+    (:vars rule)))
+
+(defn query [session rule-name]
+  (last (query-all session rule-name)))
 
