@@ -36,7 +36,7 @@
   (when-let [child (:child node)]
     (print-node child (inc level))))
 
-(print-node (:alpha-node @*session) 0)
+(print-node (:root-node @*session) 0)
 
 #_
 (println (o/query @*session ::get-player))

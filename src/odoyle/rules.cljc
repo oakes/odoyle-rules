@@ -49,7 +49,7 @@
 (defrecord Rule [conditions ;; vector of Condition
                  callback ;; fn
                  ])
-(defrecord Session [alpha-node ;; AlphaNode
+(defrecord Session [root-node ;; AlphaNode
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -88,14 +88,14 @@
 
 (defn- add-condition [session condition]
   (let [*alpha-node-path (volatile! [])
-        session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
+        session (update session :root-node add-alpha-node (:nodes condition) *alpha-node-path)
         alpha-node-path @*alpha-node-path
-        successor-count (count (get-in (:alpha-node session) (conj alpha-node-path :successors)))
+        successor-count (count (get-in (:root-node session) (conj alpha-node-path :successors)))
         join-node-path (conj alpha-node-path :successors successor-count)
         mem-node-path (conj join-node-path :child)
         mem-node (->MemoryNode mem-node-path nil)
         join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
-    (update session :alpha-node update-in alpha-node-path update :successors conj join-node)))
+    (update session :root-node update-in alpha-node-path update :successors conj join-node)))
 
 (defn- add-rule [session rule]
   (reduce add-condition session (:conditions rule)))
