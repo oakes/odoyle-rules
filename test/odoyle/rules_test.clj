@@ -23,4 +23,39 @@
       (o/insert ::yair ::right-of ::bob)
       (o/insert ::xavier ::height 72)
       (o/insert ::thomas ::height 72)
-      (o/insert ::george ::height 72)))
+      (o/insert ::george ::height 72)
+      ((fn [session]
+         (is (= 3 (count (o/query-all session ::num-conds-and-facts))))))))
+
+(deftest adding-facts-out-of-order
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::out-of-order
+           [:what
+            [x ::right-of y]
+            [y ::left-of z]
+            [z ::color "red"]
+            [a ::color "maize"]
+            [b ::color "blue"]
+            [c ::color "green"]
+            [d ::color "white"]
+            [s ::on "table"]
+            [y ::right-of b]
+            [a ::left-of d]
+            :then
+            (is (= a ::alice))
+            (is (= b ::bob))
+            (is (= y ::yair))
+            (is (= z ::zach))]}))
+      (o/insert ::xavier ::right-of ::yair)
+      (o/insert ::yair ::left-of ::zach)
+      (o/insert ::zach ::color "red")
+      (o/insert ::alice ::color "maize")
+      (o/insert ::bob ::color "blue")
+      (o/insert ::charlie ::color "green")
+      (o/insert ::seth ::on "table")
+      (o/insert ::yair ::right-of ::bob)
+      (o/insert ::alice ::left-of ::david)
+      (o/insert ::david ::color "white")
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::out-of-order))))))))
