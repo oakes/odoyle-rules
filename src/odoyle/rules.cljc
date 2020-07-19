@@ -43,7 +43,7 @@
                       facts ;; map of id -> (map of attr -> Fact)
                       ])
 (defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
-                       child ;; JoinNode
+                       child-path ;; the get-in vector to reach the child JoinNode
                        rule-name ;; keyword
                        vars ;; vector of (map of sym -> value)
                        id-attrs ;; vector of id+attr
@@ -112,14 +112,21 @@
         successor-count (count (get-in session (conj alpha-node-path :successors)))
         join-node-path (conj alpha-node-path :successors successor-count)
         mem-node-path (conj join-node-path :child)
-        mem-node (->MemoryNode mem-node-path nil (:rule-name condition) [] [])
+        parent-mem-node-path (:mem-node-path session)
+        mem-node (map->MemoryNode {:path mem-node-path
+                                   :child-path nil
+                                   :rule-name (:rule-name condition)
+                                   :vars []
+                                   :id-attrs []})
         join-node (map->JoinNode {:path join-node-path
-                                  :parent-path (:mem-node-path session)
+                                  :parent-path parent-mem-node-path
                                   :child mem-node
                                   :alpha-node-path alpha-node-path
                                   :condition condition})]
     (-> session
         (assoc-in join-node-path join-node)
+        (cond-> parent-mem-node-path
+                (update-in parent-mem-node-path assoc :child-path join-node-path))
         (assoc :mem-node-path mem-node-path))))
 
 (defn- get-vars-from-fact [vars condition fact]
@@ -153,10 +160,10 @@
 (defn- left-activate-join-node [session node vars token]
   session)
 
-(defn- left-activate-memory-node [session node vars token]
-  (let [node-path (:path node)
-        {:keys [id attr] :as fact} (:fact token)
-        id+attr [id attr]]
+(defn- left-activate-memory-node [session node-path vars token]
+  (let [{:keys [id attr] :as fact} (:fact token)
+        id+attr [id attr]
+        node (get-in session node-path)]
     (as-> session $
           (case (:kind token)
             :insert
@@ -177,8 +184,8 @@
             (let [index (.indexOf (:id-attrs node) id+attr)]
               (assert (>= index 0))
               (update-in session node-path assoc-in [:vars index] vars)))
-          (if-let [join-node (:child node)]
-            (left-activate-join-node $ join-node vars token)
+          (if-let [join-node-path (:child-path node)]
+            (left-activate-join-node $ join-node-path vars token)
             $))))
 
 (defn- right-activate-join-node [session node-path token]
@@ -187,13 +194,13 @@
       (reduce
         (fn [session existing-vars]
           (if-let [vars (perform-join-tests node existing-vars (:fact token))]
-            (left-activate-memory-node session (:child node) vars token)
+            (left-activate-memory-node session (-> node :child :path) vars token)
             session))
         session
         (:vars (get-in session parent-path)))
       ;; root node
       (if-let [vars (perform-join-tests node {} (:fact token))]
-        (left-activate-memory-node session (:child node) vars token)
+        (left-activate-memory-node session (-> node :child :path) vars token)
         session))))
 
 (defn- right-activate-alpha-node [session node-path token]
