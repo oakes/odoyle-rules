@@ -450,6 +450,11 @@
         (upsert-fact session id attr value)
         trigger-then-blocks)))
 
+(s/fdef retract
+  :args (s/cat :session ::session
+               :id qualified-keyword?
+               :attr qualified-keyword?))
+
 (defn retract [session id attr]
   (let [id+attr [id attr]
         node-paths (get-in session [:id-attr-nodes id+attr])]
