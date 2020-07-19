@@ -103,15 +103,49 @@
       node)))
 
 (defn- add-condition [session condition]
-  (let [*alpha-node-path (volatile! [])
+  (let [*alpha-node-path (volatile! [:root-node])
         session (update session :root-node add-alpha-node (:nodes condition) *alpha-node-path)
         alpha-node-path @*alpha-node-path
-        successor-count (count (get-in (:root-node session) (conj alpha-node-path :successors)))
+        successor-count (count (get-in session (conj alpha-node-path :successors)))
         join-node-path (conj alpha-node-path :successors successor-count)
         mem-node-path (conj join-node-path :child)
         mem-node (->MemoryNode mem-node-path nil (:rule-name condition))
         join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
-    (update session :root-node update-in alpha-node-path update :successors conj join-node)))
+    (assoc-in session join-node-path join-node)))
+
+(defn- right-activate-join-node [session node-path token]
+  session)
+
+(defn- right-activate-alpha-node [session node-path token]
+  (let [{:keys [id attr] :as fact} (:fact token)
+        id+attr [id attr]]
+    (as-> session $
+          (case (:kind token)
+            :insert
+            (-> $
+                (update-in node-path assoc-in [:facts id attr] fact)
+                (update-in [:id-attr-nodes id+attr]
+                           (fn [node-paths]
+                             (let [node-paths (or node-paths #{})]
+                               (assert (not (contains? node-paths node-path)))
+                               (conj node-paths node-path)))))
+            :retract
+            (-> $
+                (update-in node-path update-in [:facts id] dissoc attr)
+                (update-in [:id-attr-nodes id+attr]
+                           (fn [node-paths]
+                             (assert (contains? node-paths node-path))
+                             (disj node-paths node-path))))
+            :update
+            (update-in $ node-path update-in [:facts id attr]
+                       (fn [old-fact]
+                         (assert (= (:old-fact token) old-fact))
+                         fact)))
+          (reduce
+            (fn [session child]
+              (right-activate-join-node session (:path child) token))
+            $
+            (:successors (get-in session node-path))))))
 
 (defn- get-alpha-nodes-for-fact [session alpha-node id attr value root?]
   (if root?
@@ -131,9 +165,6 @@
           #{(:path alpha-node)}
           (:children alpha-node))))))
 
-(defn- right-activation [session node-path token]
-  session)
-
 (defn- upsert-fact [session id attr value node-paths]
   (let [id+attr [id attr]
         fact (->Fact id attr value)]
@@ -146,7 +177,8 @@
                   (let [node (get-in session node-path)
                         old-fact (get-in node [:facts id attr])]
                     (assert old-fact)
-                    (right-activation session node-path (->Token old-fact :retract nil)))))
+                    (right-activate-alpha-node session node-path (->Token old-fact :retract nil)))
+                  session))
               $
               existing-node-paths)
             ;; update or insert facts, depending on whether the node already exists
@@ -156,13 +188,13 @@
                   (let [node (get-in session node-path)
                         old-fact (get-in node [:facts id attr])]
                     (assert old-fact)
-                    (right-activation session node-path (->Token fact :update old-fact)))
-                  (right-activation session node-path (->Token fact :insert nil))))
+                    (right-activate-alpha-node session node-path (->Token fact :update old-fact)))
+                  (right-activate-alpha-node session node-path (->Token fact :insert nil))))
               $
               node-paths))
       (reduce
         (fn [session node-path]
-          (right-activation session node-path (->Token fact :insert nil)))
+          (right-activate-alpha-node session node-path (->Token fact :insert nil)))
         session
         node-paths))))
 
