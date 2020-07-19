@@ -153,3 +153,18 @@
          (is (= 0 (count (o/query-all session ::updating-facts-diff-nodes))))
          session))))
 
+(deftest facts-can-be-stored-in-different-alpha-nodes
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [a ::left-of ::zach]]
+           ::rule2
+           [:what
+            [a ::left-of z]]}))
+      (o/insert ::alice ::left-of ::zach)
+      ((fn [session]
+         (is (= ::alice (:a (o/query session ::rule1))))
+         (is (= ::zach (:z (o/query session ::rule2))))
+         session))))
+
