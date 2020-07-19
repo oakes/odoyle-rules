@@ -30,8 +30,7 @@
 (defrecord Var [field ;; :id, :attr, or :value
                 sym ;; symbol
                 ])
-(defrecord AlphaNode [id ;; int
-                      test-field ;; :id, :attr, or :value
+(defrecord AlphaNode [test-field ;; :id, :attr, or :value
                       test-value ;; anything
                       children ;; vector of AlphaNode
                       ])
@@ -46,7 +45,7 @@
 (defn- add-to-condition [condition field [kind value]]
   (case kind
     :binding (update condition :vars conj (->Var field value))
-    :value (update condition :nodes conj (->AlphaNode nil field value []))))
+    :value (update condition :nodes conj (->AlphaNode field value []))))
 
 (defn- ->condition [{:keys [id attr value]}]
   (-> (->Condition [] [])
@@ -60,11 +59,9 @@
         callback `(fn [] ~@(:body then-block))]
     (->Rule conditions callback)))
 
-(def ^:private ^:dynamic *last-id* nil)
-(def ^:private ^:dynamic *leaf-id* nil)
+(def ^:private ^:dynamic *leaf-path* nil)
 
 (defn- add-node [node new-nodes]
-  (reset! *leaf-id* (:id node))
   (let [[new-node & other-nodes] new-nodes]
     (if new-node
       (if-let [i (->> (:children node)
@@ -73,20 +70,30 @@
                               (when (= (select-keys child [:test-field :test-value])
                                        (select-keys new-node [:test-field :test-value]))
                                 i))))]
-        (update node :children update i add-node other-nodes)
-        (let [new-node (assoc new-node :id (swap! *last-id* inc))]
+        (do
+          (swap! *leaf-path* conj i)
+          (update node :children update i add-node other-nodes))
+        (do
+          (swap! *leaf-path* conj (-> node :children count))
           (update node :children conj (add-node new-node other-nodes))))
       node)))
 
 (defn- add-nodes [session nodes]
-  (binding [*leaf-id* (atom -1)]
+  (binding [*leaf-path* (atom [])]
     [(update session :alpha-node add-node nodes)
-     @*leaf-id*]))
+     @*leaf-path*]))
 
 (defn- add-rule [session rule]
   (reduce
     (fn [session condition]
-      (let [[session leaf-id] (add-nodes session (:nodes condition))]
+      (let [[session leaf-path] (add-nodes session (:nodes condition))]
+        #_
+        (->> leaf-path
+             (reduce
+               (fn [node i]
+                 (get-in node [:children i]))
+               (:alpha-node session))
+             println)
         session))
     session
     (:conditions rule)))
@@ -102,9 +109,8 @@
          {})))
 
 (defn ->session [rules]
-  (binding [*last-id* (atom -1)]
-    (reduce
-      add-rule
-      (->Session (->AlphaNode (swap! *last-id* inc) nil nil []))
-      (vals rules))))
+  (reduce
+    add-rule
+    (->Session (->AlphaNode nil nil []))
+    (vals rules)))
 
