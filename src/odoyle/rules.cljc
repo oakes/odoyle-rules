@@ -35,12 +35,12 @@
                       children ;; vector of AlphaNode
                       successors ;; vector of JoinNode
                       ])
-(defrecord MemoryNode [path ;; vector of ints; path to this node
+(defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
                        child ;; JoinNode
                        ])
-(defrecord JoinNode [path ;; vector of ints; path to this node
+(defrecord JoinNode [path ;; the get-in vector to reach this node from the root
                      child ;; MemoryNode
-                     alpha-node-path ;; vector of ints; path to AlphaNode
+                     alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
