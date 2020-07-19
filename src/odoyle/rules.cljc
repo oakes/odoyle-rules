@@ -30,7 +30,8 @@
 (defrecord Var [field ;; :id, :attr, or :value
                 sym ;; symbol
                 ])
-(defrecord AlphaNode [test-field ;; :id, :attr, or :value
+(defrecord AlphaNode [path ;; the get-in vector to reach this node from the root
+                      test-field ;; :id, :attr, or :value
                       test-value ;; anything
                       children ;; vector of AlphaNode
                       successors ;; vector of JoinNode
@@ -59,7 +60,7 @@
 (defn- add-to-condition [condition field [kind value]]
   (case kind
     :binding (update condition :vars conj (->Var field value))
-    :value (update condition :nodes conj (->AlphaNode field value [] []))))
+    :value (update condition :nodes conj (->AlphaNode nil field value [] []))))
 
 (defn- ->condition [{:keys [id attr value]}]
   (-> {:vars [] :nodes []}
@@ -84,8 +85,8 @@
         (do
           (vswap! *alpha-node-path conj :children i)
           (update node :children update i add-alpha-node other-nodes *alpha-node-path))
-        (do
-          (vswap! *alpha-node-path conj :children (-> node :children count))
+        (let [path (vswap! *alpha-node-path conj :children (-> node :children count))
+              new-node (assoc new-node :path path)]
           (update node :children conj (add-alpha-node new-node other-nodes *alpha-node-path))))
       node)))
 
@@ -99,6 +100,24 @@
         mem-node (->MemoryNode mem-node-path nil (:rule-name condition))
         join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
     (update session :root-node update-in alpha-node-path update :successors conj join-node)))
+
+(defn- get-alpha-nodes-for-fact [session alpha-node id attr value root?]
+  (if root?
+    (reduce
+      (fn [nodes child]
+        (into nodes (get-alpha-nodes-for-fact session child id attr value false)))
+      #{}
+      (:children alpha-node))
+    (let [value (case (:test-field alpha-node)
+                  :id id
+                  :attr attr
+                  :value value)]
+      (when (= value (:test-value alpha-node))
+        (reduce
+          (fn [nodes child]
+            (into nodes (get-alpha-nodes-for-fact session child id attr value false)))
+          #{(:path alpha-node)}
+          (:children alpha-node))))))
 
 ;; public
 
@@ -121,7 +140,16 @@
     (mapv ->rule (parse ::rules rules))))
 
 (defn ->session []
-  (->Session (->AlphaNode nil nil [] []) {}))
+  (->Session (->AlphaNode nil nil nil [] []) {}))
+
+(defn insert
+  ([session id attr->value]
+   (reduce-kv (fn [session attr value]
+                (insert session id attr value))
+              session attr->value))
+  ([session id attr value]
+   (let [nodes (get-alpha-nodes-for-fact session (:root-node session) id attr value true)]
+     session)))
 
 (defn retract! [fact])
 
