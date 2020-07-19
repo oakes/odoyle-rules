@@ -25,6 +25,13 @@
       (throw (ex-info (expound/expound-str spec content) {}))
       res)))
 
+(defn- check-insert-spec
+  ([[attr value]]
+   (check-insert-spec attr value))
+  ([attr value]
+   (when-let [spec (s/get-spec attr)]
+     (parse spec value))))
+
 ;; private
 
 (defrecord Fact [id attr value])
@@ -381,6 +388,28 @@
              {}
              {}
              #{}))
+
+(s/def ::session #(instance? Session %))
+
+(s/def ::insert-args
+  (s/or
+    :three (s/cat :session ::session
+                  :id qualified-keyword?
+                  :attr->value (s/map-of qualified-keyword? any?))
+    :four (s/cat :session ::session
+                 :id qualified-keyword?
+                 :attr qualified-keyword?
+                 :value any?)))
+
+(s/fdef insert
+  :args (s/and
+          ::insert-args
+          (s/conformer
+            (fn [[kind args :as parsed-args]]
+              (case kind
+                :three (some check-insert-spec (:attr->value args))
+                :four (check-insert-spec (:attr args) (:value args)))
+              parsed-args))))
 
 (defn insert
   ([session id attr->value]

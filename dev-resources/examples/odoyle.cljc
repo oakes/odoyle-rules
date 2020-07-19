@@ -1,5 +1,11 @@
 (ns examples.odoyle
-  (:require [odoyle.rules :as o]))
+  (:require [odoyle.rules :as o]
+            [clojure.spec.alpha :as s]
+            [clojure.spec.test.alpha :as st]))
+
+(st/instrument)
+
+;(s/def ::health string?)
 
 (def rules
   (o/ruleset
