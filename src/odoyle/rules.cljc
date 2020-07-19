@@ -34,6 +34,7 @@
                   ])
 (defrecord Var [field ;; :id, :attr, or :value
                 sym ;; symbol
+                key ;; keyword
                 ])
 (defrecord AlphaNode [path ;; the get-in vector to reach this node from the root
                       test-field ;; :id, :attr, or :value
@@ -45,7 +46,7 @@
 (defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
                        child-path ;; the get-in vector to reach the child JoinNode
                        rule-name ;; keyword
-                       vars ;; vector of (map of sym -> value)
+                       vars ;; vector of (map of keyword -> value)
                        id-attrs ;; vector of id+attr
                        then-queue ;; vector of booleans
                        ])
@@ -71,7 +72,7 @@
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
-    :binding (update condition :vars conj (->Var field value))
+    :binding (update condition :vars conj (->Var field value (keyword value)))
     :value (update condition :nodes conj (map->AlphaNode {:path nil
                                                           :test-field field
                                                           :test-value value
@@ -99,7 +100,7 @@
         vars (->> conditions
                   (mapcat :vars)
                   (mapv :sym))
-        destructured-map {:syms vars}]
+        destructured-map {:keys vars}]
     [rule-name conditions destructured-map then-body]))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
@@ -147,20 +148,21 @@
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
     (fn [m cond-var]
-      (let [sym (:sym cond-var)]
+      (let [var-key (:key cond-var)
+            existing-val (get m var-key)]
         (case (:field cond-var)
           :id
-          (if (and (contains? m sym)
-                   (not= (get m sym) (:id fact)))
+          (if (and (some? existing-val)
+                   (not= existing-val (:id fact)))
             (reduced nil)
-            (assoc m sym (:id fact)))
+            (assoc m var-key (:id fact)))
           :attr
           (throw (ex-info "Attributes cannot contain vars" {}))
           :value
-          (if (and (contains? m sym)
-                   (not= (get m sym) (:value fact)))
+          (if (and (some? existing-val)
+                   (not= existing-val (:value fact)))
             (reduced nil)
-            (assoc m sym (:value fact))))))
+            (assoc m var-key (:value fact))))))
     vars
     (:vars condition)))
 
