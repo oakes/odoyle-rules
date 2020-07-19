@@ -122,7 +122,7 @@
         (assoc-in join-node-path join-node)
         (assoc :mem-node-path mem-node-path))))
 
-(defn- get-vars-from-fact [condition fact]
+(defn- get-vars-from-fact [vars condition fact]
   (reduce
     (fn [m cond-var]
       (let [sym (:sym cond-var)]
@@ -139,11 +139,11 @@
                    (not= (get m sym) (:value fact)))
             (reduced nil)
             (assoc m sym (:value fact))))))
-    {}
+    vars
     (:vars condition)))
 
-(defn- perform-join-tests [node alpha-fact]
-  (get-vars-from-fact (:condition node) alpha-fact))
+(defn- perform-join-tests [node vars alpha-fact]
+  (not-empty (get-vars-from-fact vars (:condition node) alpha-fact)))
 
 (defn- dissoc-vec [v index]
   (let [v1 (subvec v 0 index)
@@ -184,9 +184,15 @@
 (defn- right-activate-join-node [session node-path token]
   (let [node (get-in session node-path)]
     (if-let [parent-path (:parent-path node)]
-      session
+      (reduce
+        (fn [session existing-vars]
+          (if-let [vars (perform-join-tests node existing-vars (:fact token))]
+            (left-activate-memory-node session (:child node) vars token)
+            session))
+        session
+        (:vars (get-in session parent-path)))
       ;; root node
-      (if-let [vars (perform-join-tests node (:fact token))]
+      (if-let [vars (perform-join-tests node {} (:fact token))]
         (left-activate-memory-node session (:child node) vars token)
         session))))
 
