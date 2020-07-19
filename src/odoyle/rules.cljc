@@ -104,9 +104,12 @@
 
 (defn add-rule [session rule]
   (let [conditions (:conditions rule)
-        conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))]
+        conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))
+        rule-path [:rule-fns (:name rule)]]
+    (when (get-in session rule-path)
+      (throw (ex-info (str (:name rule) " already exists in session") {})))
     (-> (reduce add-condition session conditions)
-        (assoc-in [:rule-fns (:name rule)] (:rule-fn rule)))))
+        (assoc-in rule-path (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
   (reduce
