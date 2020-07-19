@@ -109,3 +109,26 @@
          (is (= 1 (count (o/query-all session ::removing-facts))))
          session))))
 
+(deftest updating-facts
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::updating-facts
+           [:what
+            [b ::color "blue"]
+            [y ::left-of z]
+            [a ::color "maize"]
+            [y ::right-of b]]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::left-of ::zach)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::updating-facts))))
+         (is (= ::zach (:z (o/query session ::updating-facts))))
+         session))
+      (o/insert ::yair ::left-of ::xavier)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::updating-facts))))
+         (is (= ::xavier (:z (o/query session ::updating-facts))))
+         session))))
+
