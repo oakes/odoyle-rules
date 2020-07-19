@@ -33,13 +33,14 @@
 (defrecord AlphaNode [test-field ;; :id, :attr, or :value
                       test-value ;; anything
                       children ;; vector of AlphaNode
+                      successors ;; vector of JoinNode
                       ])
-(defrecord MemoryNode [parent ;; JoinNode
+(defrecord MemoryNode [path ;; vector of ints; path to this node
                        child ;; JoinNode
                        ])
-(defrecord JoinNode [parent ;; MemoryNode
+(defrecord JoinNode [path ;; vector of ints; path to this node
                      child ;; MemoryNode
-                     alpha-node-path ;; vector of ints
+                     alpha-node-path ;; vector of ints; path to AlphaNode
                      condition ;; Condition
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
@@ -48,12 +49,13 @@
 (defrecord Rule [conditions ;; vector of Condition
                  callback ;; fn
                  ])
-(defrecord Session [alpha-node])
+(defrecord Session [alpha-node ;; AlphaNode
+                    ])
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
     :binding (update condition :vars conj (->Var field value))
-    :value (update condition :nodes conj (->AlphaNode field value []))))
+    :value (update condition :nodes conj (->AlphaNode field value [] []))))
 
 (defn- ->condition [{:keys [id attr value]}]
   (-> (->Condition [] [])
@@ -67,7 +69,7 @@
         callback `(fn [] ~@(:body then-block))]
     (->Rule conditions callback)))
 
-(def ^:private ^:dynamic *leaf-path* nil)
+(def ^:private ^:dynamic *alpha-node-path* nil)
 
 (defn- add-alpha-node [node new-nodes]
   (let [[new-node & other-nodes] new-nodes]
@@ -79,22 +81,30 @@
                                        (select-keys new-node [:test-field :test-value]))
                                 i))))]
         (do
-          (swap! *leaf-path* conj :children i)
+          (swap! *alpha-node-path* conj :children i)
           (update node :children update i add-alpha-node other-nodes))
         (do
-          (swap! *leaf-path* conj :children (-> node :children count))
+          (swap! *alpha-node-path* conj :children (-> node :children count))
           (update node :children conj (add-alpha-node new-node other-nodes))))
       node)))
 
 (defn- add-rule [session rule]
-  (reduce
-    (fn [session condition]
-      (binding [*leaf-path* (atom [])]
-        (let [session (update session :alpha-node add-alpha-node (:nodes condition))]
-          (println (get-in (:alpha-node session) @*leaf-path*))
-          session)))
-    session
-    (:conditions rule)))
+  (loop [session session
+         conditions (:conditions rule)
+         mem-node-path []]
+    (if-let [condition (first conditions)]
+      (let [[session
+             alpha-node-path]
+            (binding [*alpha-node-path* (atom [])]
+              [(update session :alpha-node add-alpha-node (:nodes condition))
+               @*alpha-node-path*])
+            join-node-path (conj mem-node-path :child)
+            mem-node-path (conj join-node-path :child)
+            mem-node (->MemoryNode mem-node-path nil)
+            join-node (->JoinNode join-node-path mem-node alpha-node-path condition)
+            session (update session :alpha-node update-in alpha-node-path update :successors conj join-node)]
+        (recur session (rest conditions) mem-node-path))
+      session)))
 
 ;; public
 
@@ -109,6 +119,6 @@
 (defn ->session [rules]
   (reduce
     add-rule
-    (->Session (->AlphaNode nil nil []))
+    (->Session (->AlphaNode nil nil [] []))
     (vals rules)))
 
