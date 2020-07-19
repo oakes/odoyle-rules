@@ -34,6 +34,14 @@
                       test-value ;; anything
                       children ;; vector of AlphaNode
                       ])
+(defrecord MemoryNode [parent ;; JoinNode
+                       child ;; JoinNode
+                       ])
+(defrecord JoinNode [parent ;; MemoryNode
+                     child ;; MemoryNode
+                     alpha-node-path ;; vector of ints
+                     condition ;; Condition
+                     ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       vars ;; vector of Var
                       ])
@@ -61,7 +69,7 @@
 
 (def ^:private ^:dynamic *leaf-path* nil)
 
-(defn- add-node [node new-nodes]
+(defn- add-alpha-node [node new-nodes]
   (let [[new-node & other-nodes] new-nodes]
     (if new-node
       (if-let [i (->> (:children node)
@@ -71,30 +79,20 @@
                                        (select-keys new-node [:test-field :test-value]))
                                 i))))]
         (do
-          (swap! *leaf-path* conj i)
-          (update node :children update i add-node other-nodes))
+          (swap! *leaf-path* conj :children i)
+          (update node :children update i add-alpha-node other-nodes))
         (do
-          (swap! *leaf-path* conj (-> node :children count))
-          (update node :children conj (add-node new-node other-nodes))))
+          (swap! *leaf-path* conj :children (-> node :children count))
+          (update node :children conj (add-alpha-node new-node other-nodes))))
       node)))
-
-(defn- add-nodes [session nodes]
-  (binding [*leaf-path* (atom [])]
-    [(update session :alpha-node add-node nodes)
-     @*leaf-path*]))
 
 (defn- add-rule [session rule]
   (reduce
     (fn [session condition]
-      (let [[session leaf-path] (add-nodes session (:nodes condition))]
-        #_
-        (->> leaf-path
-             (reduce
-               (fn [node i]
-                 (get-in node [:children i]))
-               (:alpha-node session))
-             println)
-        session))
+      (binding [*leaf-path* (atom [])]
+        (let [session (update session :alpha-node add-alpha-node (:nodes condition))]
+          (println (get-in (:alpha-node session) @*leaf-path*))
+          session)))
     session
     (:conditions rule)))
 
