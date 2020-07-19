@@ -50,10 +50,10 @@
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
-                 callback ;; fn
+                 rule-fn ;; fn
                  ])
 (defrecord Session [root-node ;; AlphaNode
-                    callbacks ;; fns
+                    rule-fns ;; fns
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -106,7 +106,7 @@
   (let [conditions (:conditions rule)
         conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))]
     (-> (reduce add-condition session conditions)
-        (assoc-in [:callbacks (:name rule)] (:callback rule)))))
+        (assoc-in [:rule-fns (:name rule)] (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
   (reduce
