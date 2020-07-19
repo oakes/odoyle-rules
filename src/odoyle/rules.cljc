@@ -45,8 +45,11 @@
 (defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
                        child ;; JoinNode
                        rule-name ;; keyword
+                       vars ;; vector of (map of sym -> value)
+                       id-attrs ;; vector of id+attr
                        ])
 (defrecord JoinNode [path ;; the get-in vector to reach this node from the root
+                     parent-path ;; the get-in vector to reach the parent MemoryNode
                      child ;; MemoryNode
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition
@@ -109,12 +112,83 @@
         successor-count (count (get-in session (conj alpha-node-path :successors)))
         join-node-path (conj alpha-node-path :successors successor-count)
         mem-node-path (conj join-node-path :child)
-        mem-node (->MemoryNode mem-node-path nil (:rule-name condition))
-        join-node (->JoinNode join-node-path mem-node alpha-node-path condition)]
-    (assoc-in session join-node-path join-node)))
+        mem-node (->MemoryNode mem-node-path nil (:rule-name condition) [] [])
+        join-node (map->JoinNode {:path join-node-path
+                                  :parent-path (:mem-node-path session)
+                                  :child mem-node
+                                  :alpha-node-path alpha-node-path
+                                  :condition condition})]
+    (-> session
+        (assoc-in join-node-path join-node)
+        (assoc :mem-node-path mem-node-path))))
+
+(defn- get-vars-from-fact [condition fact]
+  (reduce
+    (fn [m cond-var]
+      (let [sym (:sym cond-var)]
+        (case (:field cond-var)
+          :id
+          (if (and (contains? m sym)
+                   (not= (get m sym) (:id fact)))
+            (reduced nil)
+            (assoc m sym (:id fact)))
+          :attr
+          (throw (ex-info "Attributes cannot contain vars" {}))
+          :value
+          (if (and (contains? m sym)
+                   (not= (get m sym) (:value fact)))
+            (reduced nil)
+            (assoc m sym (:value fact))))))
+    {}
+    (:vars condition)))
+
+(defn- perform-join-tests [node alpha-fact]
+  (get-vars-from-fact (:condition node) alpha-fact))
+
+(defn- dissoc-vec [v index]
+  (let [v1 (subvec v 0 index)
+        v2 (subvec v (inc index))]
+    (into (into [] v1) v2)))
+
+(defn- left-activate-join-node [session node vars token]
+  session)
+
+(defn- left-activate-memory-node [session node vars token]
+  (let [node-path (:path node)
+        {:keys [id attr] :as fact} (:fact token)
+        id+attr [id attr]]
+    (as-> session $
+          (case (:kind token)
+            :insert
+            (update-in session node-path
+                       (fn [node]
+                         (-> node
+                             (update :vars conj vars)
+                             (update :id-attrs conj id+attr))))
+            :retract
+            (let [index (.indexOf (:id-attrs node) id+attr)]
+              (assert (>= index 0))
+              (update-in session node-path
+                         (fn [node]
+                           (-> node
+                               (update :vars dissoc-vec index)
+                               (update :id-attrs dissoc-vec index)))))
+            :update
+            (let [index (.indexOf (:id-attrs node) id+attr)]
+              (assert (>= index 0))
+              (update-in session node-path assoc-in [:vars index] vars)))
+          (if-let [join-node (:child node)]
+            (left-activate-join-node $ join-node vars token)
+            $))))
 
 (defn- right-activate-join-node [session node-path token]
-  session)
+  (let [node (get-in session node-path)]
+    (if-let [parent-path (:parent-path node)]
+      session
+      ;; root node
+      (if-let [vars (perform-join-tests node (:fact token))]
+        (left-activate-memory-node session (:child node) vars token)
+        session))))
 
 (defn- right-activate-alpha-node [session node-path token]
   (let [{:keys [id attr] :as fact} (:fact token)
@@ -207,6 +281,7 @@
     (when (get-in session rule-path)
       (throw (ex-info (str (:name rule) " already exists in session") {})))
     (-> (reduce add-condition session conditions)
+        (dissoc :mem-node-path) ;; added temporarily by add-condition
         (assoc-in rule-path (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
