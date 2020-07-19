@@ -82,3 +82,30 @@
          (is (= "green" (:c (o/query session ::duplicate-facts))))
          session))))
 
+(deftest removing-facts
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::removing-facts
+           [:what
+            [b ::color "blue"]
+            [y ::left-of z]
+            [a ::color "maize"]
+            [y ::right-of b]]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::left-of ::zach)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::removing-facts))))
+         session))
+      (o/retract ::yair ::right-of)
+      ((fn [session]
+         (is (= 0 (count (o/query-all session ::removing-facts))))
+         session))
+      (o/retract ::bob ::color)
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::removing-facts))))
+         session))))
+

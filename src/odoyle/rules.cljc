@@ -450,6 +450,19 @@
         (upsert-fact session id attr value)
         trigger-then-blocks)))
 
+(defn retract [session id attr]
+  (let [id+attr [id attr]
+        node-paths (get-in session [:id-attr-nodes id+attr])]
+    (when-not node-paths
+      (throw (ex-info (str id+attr " not in session") {})))
+    (reduce
+      (fn [session node-path]
+        (let [node (get-in session node-path)
+              fact (get-in node [:facts id attr])]
+          (right-activate-alpha-node session node-path (->Token fact :retract nil))))
+      session
+      node-paths)))
+
 (s/fdef query-all
   :args (s/cat :session ::session
                :rule-name qualified-keyword?))
