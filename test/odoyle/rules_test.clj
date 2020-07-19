@@ -132,3 +132,24 @@
          (is (= ::xavier (:z (o/query session ::updating-facts))))
          session))))
 
+(deftest updating-facts-in-different-alpha-nodes
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::updating-facts-diff-nodes
+           [:what
+            [b ::color "blue"]
+            [y ::left-of ::zach]
+            [a ::color "maize"]
+            [y ::right-of b]]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::left-of ::zach)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::updating-facts-diff-nodes))))
+         session))
+      (o/insert ::yair ::left-of ::xavier)
+      ((fn [session]
+         (is (= 0 (count (o/query-all session ::updating-facts-diff-nodes))))
+         session))))
+
