@@ -5,9 +5,7 @@
   (o/ruleset
     {::player-died
      [:what
-      [::player ::health health]
-      :when
-      (= health 0)
+      [::player ::health 0]
       :then
       (println "Hello, world")]
 

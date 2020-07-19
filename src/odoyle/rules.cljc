@@ -178,7 +178,7 @@
       (fn [session attr->fact]
         (reduce
           (fn [session alpha-fact]
-            (if-let [new-vars (not-empty (get-vars-from-fact vars (:condition join-node) alpha-fact))]
+            (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
               (left-activate-memory-node session (-> join-node :child :path) new-vars (assoc token :fact alpha-fact))
               session))
           session
@@ -235,13 +235,13 @@
     (if-let [parent-path (:parent-path node)]
       (reduce
         (fn [session existing-vars]
-          (if-let [vars (not-empty (get-vars-from-fact existing-vars (:condition node) (:fact token)))]
+          (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
             (left-activate-memory-node session (-> node :child :path) vars token)
             session))
         session
         (:vars (get-in session parent-path)))
       ;; root node
-      (if-let [vars (not-empty (get-vars-from-fact {} (:condition node) (:fact token)))]
+      (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
         (left-activate-memory-node session (-> node :child :path) vars token)
         session))))
 
@@ -304,11 +304,11 @@
         (into nodes (get-alpha-nodes-for-fact session child id attr value false)))
       #{}
       (:children alpha-node))
-    (let [value (case (:test-field alpha-node)
-                  :id id
-                  :attr attr
-                  :value value)]
-      (when (= value (:test-value alpha-node))
+    (let [test-value (case (:test-field alpha-node)
+                       :id id
+                       :attr attr
+                       :value value)]
+      (when (= test-value (:test-value alpha-node))
         (reduce
           (fn [nodes child]
             (into nodes (get-alpha-nodes-for-fact session child id attr value false)))
