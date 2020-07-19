@@ -51,6 +51,7 @@
                       facts ;; map of id -> (map of attr -> Fact)
                       ])
 (defrecord MemoryNode [id
+                       parent-id ;; JoinNode id
                        child-id ;; JoinNode id
                        rule-name ;; keyword
                        vars ;; vector of (map of keyword -> value)
@@ -130,6 +131,14 @@
           (update node :children conj (add-alpha-node new-node other-nodes *alpha-node-path))))
       node)))
 
+(defn- is-ancestor [session node-id1 node-id2]
+  (loop [node-id node-id2]
+    (if-let [parent-id (:parent-id (get-in session [:beta-nodes node-id]))]
+      (if (= node-id1 parent-id)
+        1
+        (recur parent-id))
+      -1)))
+
 (defn- add-condition [session condition]
   (let [*alpha-node-path (volatile! [:alpha-node])
         session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
@@ -139,6 +148,7 @@
         mem-node-id (vswap! *last-id inc)
         parent-mem-node-id (:mem-node-id session)
         mem-node (map->MemoryNode {:id mem-node-id
+                                   :parent-id join-node-id
                                    :child-id nil
                                    :rule-name (:rule-name condition)
                                    :vars []
@@ -148,11 +158,16 @@
                                   :parent-id parent-mem-node-id
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
-                                  :condition condition})]
+                                  :condition condition})
+        session (-> session
+                    (assoc-in [:beta-nodes join-node-id] join-node)
+                    (assoc-in [:beta-nodes mem-node-id] mem-node))
+        successor-ids (conj (:successors (get-in session alpha-node-path))
+                            join-node-id)
+        ;; successors must be sorted by ancestry (descendents first) to avoid duplicate rule firings
+        successor-ids (sort (partial is-ancestor session) successor-ids)]
     (-> session
-        (update-in alpha-node-path update :successors conj join-node-id)
-        (assoc-in [:beta-nodes join-node-id] join-node)
-        (assoc-in [:beta-nodes mem-node-id] mem-node)
+        (update-in alpha-node-path assoc :successors successor-ids)
         (cond-> parent-mem-node-id
                 (assoc-in [:beta-nodes parent-mem-node-id :child-id] join-node-id))
         (assoc :mem-node-id mem-node-id)

@@ -59,3 +59,17 @@
       (o/insert ::david ::color "white")
       ((fn [session]
          (is (= 1 (count (o/query-all session ::out-of-order))))))))
+
+(deftest duplicate-facts
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::duplicate-facts
+           [:what
+            [x ::self y]
+            [x ::color c]
+            [y ::color c]]}))
+      (o/insert ::bob ::self ::bob)
+      (o/insert ::bob ::color "red")
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::duplicate-facts))))))))
+
