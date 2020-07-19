@@ -3,15 +3,15 @@
 
 (def rules
   (o/ruleset
-    {::remove-dead-enemies
+    {::player-died
      [:what
-      [::enemy ::health health]
+      [::player ::health health]
       :when
       (= health 0)
       :then
-      (o/retract! ::enemy)]
+      (println "Hello, world")]
 
-     ::get-player
+     ::player
      [:what
       [::player ::x x]
       [::player ::y y]
@@ -19,7 +19,7 @@
 
 (def *session
   (-> (reduce o/add-rule (o/->session) rules)
-      (o/insert ::player ::health 10)
+      (o/insert ::player ::health 0)
       (o/insert ::player ::y 1)
       (o/insert ::player ::x 1)
       ;(o/insert ::player {::x 1 ::y 1 ::health 10})
