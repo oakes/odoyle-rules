@@ -38,12 +38,14 @@
   (println (type node) (dissoc node :path :children :successors :child :condition))
   (doseq [child (:children node)]
     (print-node child (inc level)))
-  (doseq [child (:successors node)]
-    (print-node child (inc level)))
   (when-let [child (:child node)]
     (print-node child (inc level))))
 
-(print-node (:root-node @*session) 0)
+(println "ALPHA")
+(print-node (:alpha-node @*session) 0)
+(println "BETA")
+(doseq [node (vals (:beta-nodes @*session))]
+  (print-node node 0))
 
 #_
 (println (o/query @*session ::get-player))

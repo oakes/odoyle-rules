@@ -71,7 +71,7 @@
                  conditions ;; vector of Condition
                  rule-fn ;; fn
                  ])
-(defrecord Session [root-node ;; AlphaNode
+(defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
                     last-id ;; last id assigned to a beta node
                     rule-fns ;; fns
@@ -131,8 +131,8 @@
       node)))
 
 (defn- add-condition [session condition]
-  (let [*alpha-node-path (volatile! [:root-node])
-        session (update session :root-node add-alpha-node (:nodes condition) *alpha-node-path)
+  (let [*alpha-node-path (volatile! [:alpha-node])
+        session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
         alpha-node-path @*alpha-node-path
         *last-id (volatile! (:last-id session))
         join-node-id (vswap! *last-id inc)
@@ -390,12 +390,12 @@
 
 (defn ->session []
   (map->Session
-    {:root-node (map->AlphaNode {:path nil
-                                 :test-field nil
-                                 :test-value nil
-                                 :children []
-                                 :successors []
-                                 :facts {}})
+    {:alpha-node (map->AlphaNode {:path nil
+                                  :test-field nil
+                                  :test-value nil
+                                  :children []
+                                  :successors []
+                                  :facts {}})
      :beta-nodes {}
      :last-id -1
      :rule-fns {}
@@ -431,7 +431,7 @@
                 (insert session id attr value))
               session attr->value))
   ([session id attr value]
-   (->> (get-alpha-nodes-for-fact session (:root-node session) id attr value true)
+   (->> (get-alpha-nodes-for-fact session (:alpha-node session) id attr value true)
         (upsert-fact session id attr value)
         trigger-then-blocks)))
 
