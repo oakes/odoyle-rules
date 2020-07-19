@@ -47,19 +47,19 @@
                       test-field ;; :id, :attr, or :value
                       test-value ;; anything
                       children ;; vector of AlphaNode
-                      successors ;; vector of JoinNode
+                      successors ;; vector of JoinNode ids
                       facts ;; map of id -> (map of attr -> Fact)
                       ])
-(defrecord MemoryNode [path ;; the get-in vector to reach this node from the root
-                       child-path ;; the get-in vector to reach the child JoinNode
+(defrecord MemoryNode [id
+                       child-id ;; JoinNode id
                        rule-name ;; keyword
                        vars ;; vector of (map of keyword -> value)
                        id-attrs ;; vector of id+attr
                        then-queue ;; vector of booleans
                        ])
-(defrecord JoinNode [path ;; the get-in vector to reach this node from the root
-                     parent-path ;; the get-in vector to reach the parent MemoryNode
-                     child ;; MemoryNode
+(defrecord JoinNode [id
+                     parent-id ;; MemoryNode id
+                     child-id ;; MemoryNode id
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition
                      ])
@@ -72,10 +72,12 @@
                  rule-fn ;; fn
                  ])
 (defrecord Session [root-node ;; AlphaNode
+                    beta-nodes ;; map of int -> MemoryNode or JoinNode
+                    last-id ;; last id assigned to a beta node
                     rule-fns ;; fns
-                    rule-paths ;; map of rule name -> the get-in vector to reach the associated MemoryNode
+                    rule-ids ;; map of rule name -> the id of the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
-                    then-nodes ;; set of MemoryNode paths that need executed
+                    then-nodes ;; set of MemoryNode ids that need executed
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -132,26 +134,29 @@
   (let [*alpha-node-path (volatile! [:root-node])
         session (update session :root-node add-alpha-node (:nodes condition) *alpha-node-path)
         alpha-node-path @*alpha-node-path
-        successor-count (count (get-in session (conj alpha-node-path :successors)))
-        join-node-path (conj alpha-node-path :successors successor-count)
-        mem-node-path (conj join-node-path :child)
-        parent-mem-node-path (:mem-node-path session)
-        mem-node (map->MemoryNode {:path mem-node-path
-                                   :child-path nil
+        *last-id (volatile! (:last-id session))
+        join-node-id (vswap! *last-id inc)
+        mem-node-id (vswap! *last-id inc)
+        parent-mem-node-id (:mem-node-id session)
+        mem-node (map->MemoryNode {:id mem-node-id
+                                   :child-id nil
                                    :rule-name (:rule-name condition)
                                    :vars []
                                    :id-attrs []
                                    :then-queue []})
-        join-node (map->JoinNode {:path join-node-path
-                                  :parent-path parent-mem-node-path
-                                  :child mem-node
+        join-node (map->JoinNode {:id join-node-id
+                                  :parent-id parent-mem-node-id
+                                  :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
                                   :condition condition})]
     (-> session
-        (assoc-in join-node-path join-node)
-        (cond-> parent-mem-node-path
-                (update-in parent-mem-node-path assoc :child-path join-node-path))
-        (assoc :mem-node-path mem-node-path))))
+        (update-in alpha-node-path update :successors conj join-node-id)
+        (assoc-in [:beta-nodes join-node-id] join-node)
+        (assoc-in [:beta-nodes mem-node-id] mem-node)
+        (cond-> parent-mem-node-id
+                (assoc-in [:beta-nodes parent-mem-node-id :child-id] join-node-id))
+        (assoc :mem-node-id mem-node-id)
+        (assoc :last-id @*last-id))))
 
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
@@ -181,24 +186,25 @@
 
 (declare left-activate-memory-node)
 
-(defn- left-activate-join-node [session node-path vars token]
-  (let [join-node (get-in session node-path)
+(defn- left-activate-join-node [session node-id vars token]
+  (let [join-node (get-in session [:beta-nodes node-id])
         alpha-node (get-in session (:alpha-node-path join-node))]
     (reduce
       (fn [session attr->fact]
         (reduce
           (fn [session alpha-fact]
             (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-              (left-activate-memory-node session (-> join-node :child :path) new-vars (assoc token :fact alpha-fact))
+              (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
               session))
           session
           (vals attr->fact)))
       session
       (vals (:facts alpha-node)))))
 
-(defn- left-activate-memory-node [session node-path vars token]
+(defn- left-activate-memory-node [session node-id vars token]
   (let [{:keys [id attr] :as fact} (:fact token)
         id+attr [id attr]
+        node-path [:beta-nodes node-id]
         node (get-in session node-path)
         prod-node? (:rule-name node)]
     (as-> session $
@@ -213,7 +219,7 @@
                                  (cond-> prod-node?
                                          (update :then-queue conj true)))))
                 (cond-> prod-node?
-                        (update :then-nodes conj node-path)))
+                        (update :then-nodes conj node-id)))
             :retract
             (let [index (.indexOf (:id-attrs node) id+attr)]
               (assert (>= index 0))
@@ -235,24 +241,24 @@
                                  (cond-> prod-node?
                                          (assoc-in [:then-queue index] true)))))
                  (cond-> prod-node?
-                         (update :then-nodes conj node-path)))))
-          (if-let [join-node-path (:child-path node)]
-            (left-activate-join-node $ join-node-path vars token)
+                         (update :then-nodes conj node-id)))))
+          (if-let [join-node-id (:child-id node)]
+            (left-activate-join-node $ join-node-id vars token)
             $))))
 
-(defn- right-activate-join-node [session node-path token]
-  (let [node (get-in session node-path)]
-    (if-let [parent-path (:parent-path node)]
+(defn- right-activate-join-node [session node-id token]
+  (let [node (get-in session [:beta-nodes node-id])]
+    (if-let [parent-id (:parent-id node)]
       (reduce
         (fn [session existing-vars]
           (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
-            (left-activate-memory-node session (-> node :child :path) vars token)
+            (left-activate-memory-node session (:child-id node) vars token)
             session))
         session
-        (:vars (get-in session parent-path)))
+        (:vars (get-in session [:beta-nodes parent-id])))
       ;; root node
       (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
-        (left-activate-memory-node session (-> node :child :path) vars token)
+        (left-activate-memory-node session (:child-id node) vars token)
         session))))
 
 (defn- right-activate-alpha-node [session node-path token]
@@ -282,8 +288,8 @@
                              (assert (= (:old-fact token) old-fact))
                              fact))))
           (reduce
-            (fn [session child]
-              (right-activate-join-node session (:path child) token))
+            (fn [session child-id]
+              (right-activate-join-node session child-id token))
             $
             (:successors (get-in session node-path))))))
 
@@ -291,8 +297,9 @@
   (if (seq then-nodes)
     (trigger-then-blocks
       (reduce
-        (fn [session node-path]
-          (let [node (get-in session node-path)
+        (fn [session node-id]
+          (let [node-path [:beta-nodes node-id]
+                node (get-in session node-path)
                 rule-name (:rule-name node)
                 rule-fn (or (get-in session [:rule-fns rule-name])
                             (throw (ex-info (str rule-name " not found") {})))]
@@ -368,8 +375,8 @@
     (when (get-in session rule-fn-path)
       (throw (ex-info (str (:name rule) " already exists in session") {})))
     (-> session
-        (assoc-in [:rule-paths (:name rule)] (:mem-node-path session))
-        (dissoc :mem-node-path) ;; assoc'ed by add-condition
+        (assoc-in [:rule-ids (:name rule)] (:mem-node-id session))
+        (dissoc :mem-node-id) ;; assoc'ed by add-condition
         (assoc-in rule-fn-path (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
@@ -389,8 +396,10 @@
                                  :children []
                                  :successors []
                                  :facts {}})
+     :beta-nodes {}
+     :last-id -1
      :rule-fns {}
-     :rule-paths {}
+     :rule-ids {}
      :id-attr-nodes {}
      :then-nodes #{}}))
 
@@ -427,9 +436,9 @@
         trigger-then-blocks)))
 
 (defn query-all [session rule-name]
-  (let [rule-path (or (get-in session [:rule-paths rule-name])
+  (let [rule-id (or (get-in session [:rule-ids rule-name])
                       (throw (ex-info (str rule-name " not in session") {})))
-        rule (get-in session rule-path)]
+        rule (get-in session [:beta-nodes rule-id])]
     (:vars rule)))
 
 (defn query [session rule-name]
