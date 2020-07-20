@@ -226,7 +226,7 @@
     vars
     (:bindings condition)))
 
-(defn- dissoc-vec [v index]
+(defn- dissoc-vec [v ^long index]
   (let [v1 (subvec v 0 index)
         v2 (subvec v (inc index))]
     (into (into [] v1) v2)))
@@ -288,7 +288,7 @@
                 (cond-> (and prod-node? trigger?)
                         (update :then-nodes conj node-id)))
             :retract
-            (let [index (.indexOf (:id-attrs node) id+attr)]
+            (let [index (int (.indexOf (:id-attrs node) id+attr))]
               (assert (>= index 0))
               (update-in $ node-path
                          (fn [node]
@@ -299,7 +299,7 @@
                                (cond-> prod-node?
                                        (update :then-queue dissoc-vec index))))))
             :update
-            (let [index (.indexOf (:id-attrs node) id+attr)]
+            (let [index (int (.indexOf (:id-attrs node) id+attr))]
               (assert (>= index 0))
               (-> $
                  (update-in node-path
