@@ -108,7 +108,7 @@
                     (cons 'and when-body)
                     (first when-body))
         then-body (:body then-block)
-        then-body (if when-body
+        then-body (if (some? when-body)
                     [`(when ~when-body ~@then-body)]
                     then-body)
         vars (->> conditions
@@ -419,7 +419,7 @@
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition ~conditions)
                        (fn [~arg] ~@then-body)
-                       ~(when when-body
+                       ~(when (some? when-body)
                           `(fn [~arg] ~when-body)))))
     []
     (mapv ->rule (parse ::rules rules))))
@@ -495,7 +495,7 @@
 
 (defn query-all [session rule-name]
   (let [rule-id (or (get-in session [:rule-ids rule-name])
-                      (throw (ex-info (str rule-name " not in session") {})))
+                    (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
     (reduce-kv
       (fn [v i var-map]

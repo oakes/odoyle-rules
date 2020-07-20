@@ -191,3 +191,34 @@
          (is (= 1 (count (o/query-all session ::complex-cond))))
          session))))
 
+(deftest out-of-order-joins-between-id-and-value
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::right-of ::alice]
+            [y ::right-of b]
+            [b ::color "blue"]]}))
+      (o/insert ::bob ::right-of ::alice)
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::rule1))))
+         session))))
+
+(deftest simple-conditions
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::simple-cond
+             [:what
+              [b ::color "blue"]
+              :when
+              false
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::bob ::color "blue")
+        ((fn [session]
+           (is (= 0 @*count))
+           session)))))
+
