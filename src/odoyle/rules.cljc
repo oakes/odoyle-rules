@@ -70,6 +70,7 @@
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition
                      prod-node-id ;; id of the MemoryNode at the end of the chain
+                     disable-fast-updates ;; boolean indicating if it isn't safe to do fast updates
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       vars ;; vector of Var
@@ -174,7 +175,8 @@
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
                                   :condition condition
-                                  :prod-node-id nil})
+                                  :prod-node-id nil
+                                  :disable-fast-updates false})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -193,7 +195,16 @@
         (update :join-node-ids (fn [node-ids]
                                  (if node-ids
                                    (conj node-ids join-node-id)
-                                   [join-node-id]))))))
+                                   [join-node-id])))
+        (update :bindings (fn [bindings]
+                            (reduce
+                              (fn [bindings var-key]
+                                (if (contains? (:all bindings) var-key)
+                                  (update bindings :joins conj var-key)
+                                  (update bindings :all conj var-key)))
+                              (or bindings
+                                  {:all #{} :joins #{}})
+                              (->> condition :vars (map :key))))))))
 
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
@@ -345,7 +356,13 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (right-activate-join-node session child-id token))
+              (let [node (get-in session [:beta-nodes child-id])]
+                (if (and (= :update (:kind token))
+                         (:disable-fast-updates node))
+                  (-> session
+                      (right-activate-join-node child-id (->Token (:old-fact token) :retract nil))
+                      (right-activate-join-node child-id (->Token (:fact token) :insert nil)))
+                  (right-activate-join-node session child-id token))))
             $
             (:successors (get-in session node-path))))))
 
@@ -447,9 +464,20 @@
         ;; the "prod" node is the one at the end of the chain
         ;; that contains the full results
         prod-node-id (:mem-node-id session)
+        ;; the bindings (symbols) from the :what block
+        bindings (:bindings session)
         ;; let every join node know what their prod node is
+        ;; and disable fast updates if necessary
         session (reduce (fn [session join-node-id]
-                          (assoc-in session [:beta-nodes join-node-id :prod-node-id] prod-node-id))
+                          (update-in session [:beta-nodes join-node-id]
+                                     (fn [join-node]
+                                       (assoc join-node
+                                              :prod-node-id prod-node-id
+                                              ;; disable fast updates for facts whose value is part of a join
+                                              :disable-fast-updates (contains? (:joins bindings)
+                                                                               (some (fn [{:keys [field key]}]
+                                                                                       (when (= :value field) key))
+                                                                                     (-> join-node :condition :vars)))))))
                         session
                         (:join-node-ids session))]
     (-> session
@@ -457,7 +485,7 @@
         (assoc-in [:rule-ids (:name rule)] prod-node-id)
         (assoc-in [:rule-fns (:name rule)] (:rule-fn rule))
         ;; assoc'ed by add-condition
-        (dissoc :mem-node-id :join-node-ids))))
+        (dissoc :mem-node-id :join-node-ids :bindings))))
 
 (defmacro ruleset [rules]
   (reduce

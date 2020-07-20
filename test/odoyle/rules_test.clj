@@ -415,3 +415,24 @@
       (o/insert ::yair ::right-of ::bob)
       (o/insert 1 ::left-of ::bob)))
 
+(deftest dont-use-the-fast-update-mechanism-if-its-part-of-a-join
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::left-of id]
+            [id ::color color]
+            [id ::height height]]}))
+      (o/insert ::alice ::color "blue")
+      (o/insert ::alice ::height 60)
+      (o/insert ::charlie ::color "green")
+      (o/insert ::charlie ::height 72)
+      (o/insert ::bob ::left-of ::alice)
+      ((fn [session]
+         (is (= ::alice (:id (o/query session ::rule1))))
+         session))
+      (o/insert ::bob ::left-of ::charlie)
+      ((fn [session]
+         (is (= ::charlie (:id (o/query session ::rule1))))
+         session))))
+
