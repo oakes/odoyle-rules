@@ -7,7 +7,9 @@
 (s/def ::what-id (s/or :binding simple-symbol? :value qualified-keyword?))
 (s/def ::what-attr (s/or :value qualified-keyword?))
 (s/def ::what-value (s/or :binding simple-symbol? :value any?))
-(s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value))
+(s/def ::then boolean?)
+(s/def ::what-opts (s/keys :opt-un [::then]))
+(s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
 (s/def ::when-block (s/cat :header #{:when} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-block (s/cat :header #{:then} :body (s/+ #(not (keyword? %)))))
@@ -59,15 +61,18 @@
                        enabled ;; vector of booleans
                        then-queue ;; vector of booleans
                        filter-fn ;; the :when condition in a function
+                       trigger ;; boolean indicating that the :then block can be triggered
                        ])
 (defrecord JoinNode [id
                      parent-id ;; MemoryNode id
                      child-id ;; MemoryNode id
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition
+                     prod-node-id ;; id of the MemoryNode at the end of the chain
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       vars ;; vector of Var
+                      opts ;; map of options
                       rule-name ;; keyword
                       ])
 (defrecord Rule [name ;; keyword
@@ -94,8 +99,8 @@
                                                           :successors []
                                                           :facts {}}))))
 
-(defn- ->condition [{:keys [id attr value]}]
-  (-> {:vars [] :nodes []}
+(defn- ->condition [{:keys [id attr value opts]}]
+  (-> {:vars [] :nodes [] :opts opts}
       (add-to-condition :id id)
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
@@ -161,12 +166,14 @@
                                    :vars []
                                    :id-attrs []
                                    :enabled []
-                                   :then-queue []})
+                                   :then-queue []
+                                   :trigger false})
         join-node (map->JoinNode {:id join-node-id
                                   :parent-id parent-mem-node-id
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
-                                  :condition condition})
+                                  :condition condition
+                                  :prod-node-id nil})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -178,8 +185,14 @@
         (update-in alpha-node-path assoc :successors successor-ids)
         (cond-> parent-mem-node-id
                 (assoc-in [:beta-nodes parent-mem-node-id :child-id] join-node-id))
+        (assoc :last-id @*last-id)
+        ;; these are only being added temporarily
+        ;; they will be removed later
         (assoc :mem-node-id mem-node-id)
-        (assoc :last-id @*last-id))))
+        (update :join-node-ids (fn [node-ids]
+                                 (if node-ids
+                                   (conj node-ids join-node-id)
+                                   [join-node-id]))))))
 
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
@@ -230,10 +243,16 @@
         node-path [:beta-nodes node-id]
         node (get-in session node-path)
         prod-node? (:rule-name node)
+        ;; whether the matches in this node should
+        ;; return in query results
         enabled? (boolean
                    (or (not prod-node?)
                        (nil? (:filter-fn node))
-                       ((:filter-fn node) vars)))]
+                       ((:filter-fn node) vars)))
+        ;; whether the matches in this node should
+        ;; trigger :then blocks
+        trigger? (and (:trigger node)
+                      enabled?)]
     (as-> session $
           (case (:kind token)
             :insert
@@ -245,7 +264,7 @@
                                  (update :id-attrs conj id+attr)
                                  (update :enabled conj enabled?)
                                  (cond-> prod-node?
-                                         (update :then-queue conj true)))))
+                                         (update :then-queue conj trigger?)))))
                 (cond-> prod-node?
                         (update :then-nodes conj node-id)))
             :retract
@@ -271,7 +290,7 @@
                                  ;(assoc-in [:id-attrs index] id+attr)
                                  (assoc-in [:enabled index] enabled?)
                                  (cond-> prod-node?
-                                         (assoc-in [:then-queue index] true)))))
+                                         (assoc-in [:then-queue index] trigger?)))))
                  (cond-> prod-node?
                          (update :then-nodes conj node-id)))))
           (if-let [join-node-id (:child-id node)]
@@ -279,7 +298,11 @@
             $))))
 
 (defn- right-activate-join-node [session node-id token]
-  (let [node (get-in session [:beta-nodes node-id])]
+  (let [node (get-in session [:beta-nodes node-id])
+        session (if (and (#{:insert :update} (:kind token))
+                         (-> node :condition :opts :then (not= false)))
+                  (assoc-in session [:beta-nodes (:prod-node-id node) :trigger] true)
+                  session)]
     (if-let [parent-id (:parent-id node)]
       (reduce
         (fn [session existing-vars]
@@ -334,7 +357,8 @@
                 node (get-in session node-path)
                 rule-name (:rule-name node)
                 rule-fn (or (get-in session [:rule-fns rule-name])
-                            (throw (ex-info (str rule-name " not found") {})))]
+                            (throw (ex-info (str rule-name " not found") {})))
+                session (update-in session node-path assoc :trigger false)]
             (reduce-kv
               (fn [session i trigger?]
                 (when trigger?
@@ -400,18 +424,25 @@
 ;; public
 
 (defn add-rule [session rule]
+  (when (get-in session [:rule-fns (:name rule)])
+    (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
         conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))
-        rule-fn-path [:rule-fns (:name rule)]
         session (reduce add-condition session conditions)
-        mem-node-id (:mem-node-id session)]
-    (when (get-in session rule-fn-path)
-      (throw (ex-info (str (:name rule) " already exists in session") {})))
+        ;; the "prod" node is the one at the end of the chain
+        ;; that contains the full results
+        prod-node-id (:mem-node-id session)
+        ;; let every join node know what their prod node is
+        session (reduce (fn [session join-node-id]
+                          (assoc-in session [:beta-nodes join-node-id :prod-node-id] prod-node-id))
+                        session
+                        (:join-node-ids session))]
     (-> session
-        (assoc-in [:beta-nodes mem-node-id :filter-fn] (:filter-fn rule))
-        (assoc-in [:rule-ids (:name rule)] mem-node-id)
-        (dissoc :mem-node-id) ;; assoc'ed by add-condition
-        (assoc-in rule-fn-path (:rule-fn rule)))))
+        (assoc-in [:beta-nodes prod-node-id :filter-fn] (:filter-fn rule))
+        (assoc-in [:rule-ids (:name rule)] prod-node-id)
+        (assoc-in [:rule-fns (:name rule)] (:rule-fn rule))
+        ;; assoc'ed by add-condition
+        (dissoc :mem-node-id :join-node-ids))))
 
 (defmacro ruleset [rules]
   (reduce

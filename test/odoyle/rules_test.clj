@@ -266,3 +266,20 @@
       (o/insert ::alice ::color "red")
       (o/insert ::alice ::left-of ::bob)))
 
+(deftest dont-trigger-rule-when-updating-certain-facts
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::dont-trigger
+             [:what
+              [b ::color "blue"]
+              [a ::color c {:then false}]
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::bob ::color "blue")
+        (o/insert ::alice ::color "red")
+        (o/insert ::alice ::color "maize")
+        ((fn [session]
+           (is (= 1 @*count))
+           session)))))
+
