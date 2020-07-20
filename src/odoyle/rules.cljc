@@ -75,7 +75,6 @@
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
                       opts ;; map of options
-                      rule-name ;; keyword
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
@@ -163,7 +162,7 @@
         mem-node (map->MemoryNode {:id mem-node-id
                                    :parent-id join-node-id
                                    :child-id nil
-                                   :rule-name (:rule-name condition)
+                                   :rule-name nil
                                    :vars []
                                    :id-attrs []
                                    :enabled []
@@ -276,7 +275,7 @@
                                  (update :enabled conj enabled?)
                                  (cond-> prod-node?
                                          (update :then-queue conj trigger?)))))
-                (cond-> prod-node?
+                (cond-> (and prod-node? trigger?)
                         (update :then-nodes conj node-id)))
             :retract
             (let [index (.indexOf (:id-attrs node) id+attr)]
@@ -302,7 +301,7 @@
                                  (assoc-in [:enabled index] enabled?)
                                  (cond-> prod-node?
                                          (assoc-in [:then-queue index] trigger?)))))
-                 (cond-> prod-node?
+                 (cond-> (and prod-node? trigger?)
                          (update :then-nodes conj node-id)))))
           (if-let [join-node-id (:child-id node)]
             (left-activate-join-node $ join-node-id vars token)
@@ -458,11 +457,12 @@
   (when (get-in session [:rule-fns (:name rule)])
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
-        conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))
         session (reduce add-condition session conditions)
         ;; the "prod" node is the one at the end of the chain
         ;; that contains the full results
         prod-node-id (:mem-node-id session)
+        ;; let the prod node know what rule it is associated with
+        session (assoc-in session [:beta-nodes prod-node-id :rule-name] (:name rule))
         ;; the bindings (symbols) from the :what block
         bindings (:bindings session)
         ;; let every join node know what their prod node is
