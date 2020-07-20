@@ -1,6 +1,9 @@
 (ns odoyle.rules-test
   (:require [clojure.test :refer :all]
-            [odoyle.rules :as o]))
+            [odoyle.rules :as o]
+            [clojure.spec.test.alpha :as st]))
+
+(st/instrument)
 
 (deftest num-of-conditions-not=-num-of-facts
   (-> (reduce o/add-rule (o/->session)
@@ -282,4 +285,19 @@
         ((fn [session]
            (is (= 1 @*count))
            session)))))
+
+(deftest inserting-inside-a-rule
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::color "blue"]
+            [a ::color c]
+            :then
+            (o/insert! ::alice ::color "maize")]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::alice ::color "red")
+      ((fn [session]
+         (is (= "maize" (:c (o/query session ::rule1))))
+         session))))
 

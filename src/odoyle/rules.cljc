@@ -348,8 +348,12 @@
             $
             (:successors (get-in session node-path))))))
 
+(def ^:private ^:dynamic *session* nil)
+
 (defn- trigger-then-blocks [{:keys [then-nodes] :as session}]
-  (if (seq then-nodes)
+  (if (and (seq then-nodes)
+           ;; don't trigger :then blocks while inside a rule
+           (nil? *session*))
     (trigger-then-blocks
       (reduce
         (fn [session node-id]
@@ -361,9 +365,12 @@
                 session (update-in session node-path assoc :trigger false)]
             (reduce-kv
               (fn [session i trigger?]
-                (when trigger?
-                  (rule-fn (nth (:vars node) i)))
-                (update-in session node-path assoc-in [:then-queue i] false))
+                (-> (if trigger?
+                      (binding [*session* (volatile! session)]
+                        (rule-fn (nth (:vars node) i))
+                        @*session*)
+                      session)
+                    (update-in node-path assoc-in [:then-queue i] false)))
               session
               (:then-queue node))))
         (assoc session :then-nodes #{})
@@ -474,23 +481,24 @@
 
 (s/def ::insert-args
   (s/or
-    :three (s/cat :session ::session
+    :batch (s/cat :session ::session
                   :id qualified-keyword?
                   :attr->value (s/map-of qualified-keyword? any?))
-    :four (s/cat :session ::session
-                 :id qualified-keyword?
-                 :attr qualified-keyword?
-                 :value any?)))
+    :single (s/cat :session ::session
+                   :id qualified-keyword?
+                   :attr qualified-keyword?
+                   :value any?)))
+
+(def ^:private insert-conformer
+  (s/conformer
+    (fn [[kind args :as parsed-args]]
+      (case kind
+        :batch (some check-insert-spec (:attr->value args))
+        :single (check-insert-spec (:attr args) (:value args)))
+      parsed-args)))
 
 (s/fdef insert
-  :args (s/and
-          ::insert-args
-          (s/conformer
-            (fn [[kind args :as parsed-args]]
-              (case kind
-                :three (some check-insert-spec (:attr->value args))
-                :four (check-insert-spec (:attr args) (:value args)))
-              parsed-args))))
+  :args (s/and ::insert-args insert-conformer))
 
 (defn insert
   ([session id attr->value]
@@ -501,6 +509,27 @@
    (->> (get-alpha-nodes-for-fact session (:alpha-node session) id attr value true)
         (upsert-fact session id attr value)
         trigger-then-blocks)))
+
+(s/def ::insert!-args
+  (s/or
+    :batch (s/cat :id qualified-keyword?
+                  :attr->value (s/map-of qualified-keyword? any?))
+    :single (s/cat :id qualified-keyword?
+                   :attr qualified-keyword?
+                   :value any?)))
+
+(s/fdef insert!
+  :args (s/and ::insert!-args insert-conformer))
+
+(defn insert!
+  ([id attr->value]
+   (run! (fn [[attr value]]
+           (insert! id attr value))
+         attr->value))
+  ([id attr value]
+   (if *session*
+     (vswap! *session* insert id attr value)
+     (throw (ex-info "This function must be called in a :then block" {})))))
 
 (s/fdef retract
   :args (s/cat :session ::session
