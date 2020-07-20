@@ -569,7 +569,7 @@
 
 (s/fdef retract
   :args (s/cat :session ::session
-               :id qualified-keyword?
+               :id ::id
                :attr qualified-keyword?))
 
 (defn retract [session id attr]
@@ -584,6 +584,15 @@
           (right-activate-alpha-node session node-path (->Token fact :retract nil))))
       session
       node-paths)))
+
+(s/fdef retract!
+  :args (s/cat :id ::id
+               :attr qualified-keyword?))
+
+(defn retract! [id attr]
+  (if *session*
+    (vswap! *session* retract id attr)
+    (throw (ex-info "This function must be called in a :then block" {}))))
 
 (s/fdef query-all
   :args (s/cat :session ::session
