@@ -292,7 +292,7 @@
           {::rule1
            [:what
             [b ::color "blue"]
-            [a ::color c]
+            [::alice ::color c {:then false}]
             :then
             (o/insert! ::alice ::color "maize")]}))
       (o/insert ::bob ::color "blue")
@@ -300,4 +300,28 @@
       ((fn [session]
          (is (= "maize" (:c (o/query session ::rule1))))
          session))))
+
+(deftest inserting-inside-a-rule-can-trigger-more-than-once
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::rule1
+             [:what
+              [b ::color "blue"]
+              :then
+              (o/insert! ::alice ::color "maize")
+              (o/insert! ::charlie ::color "gold")]
+             ::rule2
+             [:what
+              [::alice ::color c1]
+              [other-person ::color c2]
+              :when
+              (not= other-person ::alice)
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::alice ::color "red")
+        (o/insert ::bob ::color "blue")
+        ((fn [session]
+           (is (= 3 @*count))
+           session)))))
 
