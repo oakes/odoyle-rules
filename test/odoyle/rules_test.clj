@@ -222,3 +222,47 @@
            (is (= 0 @*count))
            session)))))
 
+(deftest queries
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::get-person
+           [:what
+            [id ::color color]
+            [id ::left-of left-of]
+            [id ::height height]]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::bob ::left-of ::zach)
+      (o/insert ::bob ::height 72)
+      (o/insert ::alice ::color "green")
+      (o/insert ::alice ::left-of ::bob)
+      (o/insert ::alice ::height 64)
+      (o/insert ::charlie ::color "red")
+      (o/insert ::charlie ::left-of ::alice)
+      (o/insert ::charlie ::height 72)
+      ((fn [session]
+         (is (= 3 (count (o/query-all session ::get-person))))
+         (is (= ::charlie (:id (o/query session ::get-person))))
+         session))))
+
+(deftest creating-a-ruleset
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::bob
+           [:what
+            [b ::color "blue"]
+            [b ::right-of a]
+            :then
+            (is (= a ::alice))
+            (is (= b ::bob))]
+           ::alice
+           [:what
+            [a ::color "red"]
+            [a ::left-of b]
+            :then
+            (is (= a ::alice))
+            (is (= b ::bob))]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::bob ::right-of ::alice)
+      (o/insert ::alice ::color "red")
+      (o/insert ::alice ::left-of ::bob)))
+
