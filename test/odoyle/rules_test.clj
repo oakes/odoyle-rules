@@ -394,3 +394,24 @@
          (is (= 0 (count (o/query-all session ::get-alice))))
          session))))
 
+(deftest ids-can-be-arbitrary-integers
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::color "blue"]
+            [y ::left-of z]
+            [a ::color "maize"]
+            [y ::right-of b]
+            [z ::left-of b]
+            :then
+            (is (= a ::alice))
+            (is (= b ::bob))
+            (is (= y ::yair))
+            (is (= z 1))]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::left-of 1)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::yair ::right-of ::bob)
+      (o/insert 1 ::left-of ::bob)))
+

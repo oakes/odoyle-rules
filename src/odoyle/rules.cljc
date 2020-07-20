@@ -4,7 +4,8 @@
 
 ;; parsing
 
-(s/def ::what-id (s/or :binding simple-symbol? :value qualified-keyword?))
+(s/def ::id #(or (qualified-keyword? %) (integer? %)))
+(s/def ::what-id (s/or :binding simple-symbol? :value ::id))
 (s/def ::what-attr (s/or :value qualified-keyword?))
 (s/def ::what-value (s/or :binding simple-symbol? :value any?))
 (s/def ::then boolean?)
@@ -489,10 +490,10 @@
 (s/def ::insert-args
   (s/or
     :batch (s/cat :session ::session
-                  :id qualified-keyword?
+                  :id ::id
                   :attr->value (s/map-of qualified-keyword? any?))
     :single (s/cat :session ::session
-                   :id qualified-keyword?
+                   :id ::id
                    :attr qualified-keyword?
                    :value any?)))
 
@@ -519,9 +520,9 @@
 
 (s/def ::insert!-args
   (s/or
-    :batch (s/cat :id qualified-keyword?
+    :batch (s/cat :id ::id
                   :attr->value (s/map-of qualified-keyword? any?))
-    :single (s/cat :id qualified-keyword?
+    :single (s/cat :id ::id
                    :attr qualified-keyword?
                    :value any?)))
 
