@@ -71,6 +71,7 @@
                      condition ;; Condition
                      prod-node-id ;; id of the MemoryNode at the end of the chain
                      disable-fast-updates ;; boolean indicating if it isn't safe to do fast updates
+                     id-key ;; the name of the id binding if we know it
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
@@ -174,7 +175,8 @@
                                   :alpha-node-path alpha-node-path
                                   :condition condition
                                   :prod-node-id nil
-                                  :disable-fast-updates false})
+                                  :disable-fast-updates false
+                                  :id-key nil})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -234,17 +236,26 @@
 (defn- left-activate-join-node [session node-id vars token]
   (let [join-node (get-in session [:beta-nodes node-id])
         alpha-node (get-in session (:alpha-node-path join-node))]
-    (reduce
-      (fn [session attr->fact]
-        (reduce
-          (fn [session alpha-fact]
-            (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-              (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
-              session))
-          session
-          (vals attr->fact)))
-      session
-      (vals (:facts alpha-node)))))
+    ;; SHORTCUT: if we know the id, only loop over alpha facts with that id
+    (if-let [id (some->> join-node :id-key (get vars))]
+      (reduce
+        (fn [session alpha-fact]
+          (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
+            (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
+            session))
+        session
+        (vals (get-in alpha-node [:facts id])))
+      (reduce
+        (fn [session attr->fact]
+          (reduce
+            (fn [session alpha-fact]
+              (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
+                (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
+                session))
+            session
+            (vals attr->fact)))
+        session
+        (vals (:facts alpha-node))))))
 
 (defn- left-activate-memory-node [session node-id vars token]
   (let [{:keys [id attr] :as fact} (:fact token)
@@ -318,11 +329,14 @@
     (if-let [parent-id (:parent-id node)]
       (reduce
         (fn [session existing-vars]
-          (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
-            (-> session
-                (set-trigger (:prod-node-id node) trigger?)
-                (left-activate-memory-node (:child-id node) vars token))
-            session))
+          ;; SHORTCUT: if we know the id, compare it with the token right away
+          (if (some->> node :id-key (get existing-vars) (not= (-> token :fact :id)))
+            session
+            (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
+              (-> session
+                  (set-trigger (:prod-node-id node) trigger?)
+                  (left-activate-memory-node (:child-id node) vars token))
+              session)))
         session
         (:vars (get-in session [:beta-nodes parent-id])))
       ;; root node
@@ -471,13 +485,20 @@
         session (assoc-in session [:beta-nodes prod-node-id :rule-name] (:name rule))
         ;; the bindings (symbols) from the :what block
         bindings (:bindings session)
-        ;; let every join node know what their prod node is
-        ;; and disable fast updates if necessary
+        ;; update all join nodes with:
+        ;; 1. the id of their prod node
+        ;; 2. the name of the id binding, if it exists
+        ;; 3. whether to disable fast updates
         session (reduce (fn [session join-node-id]
                           (update-in session [:beta-nodes join-node-id]
                                      (fn [join-node]
                                        (assoc join-node
                                               :prod-node-id prod-node-id
+                                              :id-key (some (fn [{:keys [field key]}]
+                                                              (when (and (= :id field)
+                                                                         (contains? (:joins bindings) key))
+                                                                key))
+                                                            (-> join-node :condition :bindings))
                                               ;; disable fast updates for facts whose value is part of a join
                                               :disable-fast-updates (contains? (:joins bindings)
                                                                                (some (fn [{:keys [field key]}]
