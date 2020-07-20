@@ -168,3 +168,26 @@
          (is (= ::zach (:z (o/query session ::rule2))))
          session))))
 
+(deftest complex-conditions
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::complex-cond
+           [:what
+            [b ::color "blue"]
+            [y ::left-of z]
+            [a ::color "maize"]
+            [y ::right-of b]
+            :when
+            (not= z ::zach)]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::yair ::left-of ::zach)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::yair ::right-of ::bob)
+      ((fn [session]
+         (is (= 0 (count (o/query-all session ::complex-cond))))
+         session))
+      (o/insert ::yair ::left-of ::charlie)
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::complex-cond))))
+         session))))
+

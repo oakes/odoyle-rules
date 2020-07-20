@@ -56,7 +56,9 @@
                        rule-name ;; keyword
                        vars ;; vector of (map of keyword -> value)
                        id-attrs ;; vector of id+attr
+                       enabled ;; vector of booleans
                        then-queue ;; vector of booleans
+                       filter-fn ;; the :when condition in a function
                        ])
 (defrecord JoinNode [id
                      parent-id ;; MemoryNode id
@@ -71,6 +73,7 @@
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
                  rule-fn ;; fn
+                 filter-fn ;; fn
                  ])
 (defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
@@ -111,8 +114,12 @@
         vars (->> conditions
                   (mapcat :vars)
                   (mapv :sym))
-        destructured-map {:keys vars}]
-    [rule-name conditions destructured-map then-body]))
+        arg {:keys vars}]
+    {:rule-name rule-name
+     :conditions conditions
+     :arg arg
+     :when-body when-body
+     :then-body then-body}))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]
@@ -153,6 +160,7 @@
                                    :rule-name (:rule-name condition)
                                    :vars []
                                    :id-attrs []
+                                   :enabled []
                                    :then-queue []})
         join-node (map->JoinNode {:id join-node-id
                                   :parent-id parent-mem-node-id
@@ -221,7 +229,11 @@
         id+attr [id attr]
         node-path [:beta-nodes node-id]
         node (get-in session node-path)
-        prod-node? (:rule-name node)]
+        prod-node? (:rule-name node)
+        enabled? (boolean
+                   (or (not prod-node?)
+                       (nil? (:filter-fn node))
+                       ((:filter-fn node) vars)))]
     (as-> session $
           (case (:kind token)
             :insert
@@ -231,6 +243,7 @@
                              (-> node
                                  (update :vars conj vars)
                                  (update :id-attrs conj id+attr)
+                                 (update :enabled conj enabled?)
                                  (cond-> prod-node?
                                          (update :then-queue conj true)))))
                 (cond-> prod-node?
@@ -243,6 +256,7 @@
                            (-> node
                                (update :vars dissoc-vec index)
                                (update :id-attrs dissoc-vec index)
+                               (update :enabled dissoc-vec index)
                                (cond-> prod-node?
                                        (update :then-queue dissoc-vec index))))))
             :update
@@ -253,6 +267,9 @@
                             (fn [node]
                               (-> node
                                  (assoc-in [:vars index] vars)
+                                 ;; no need to do this; the id+attr will not change
+                                 ;(assoc-in [:id-attrs index] id+attr)
+                                 (assoc-in [:enabled index] enabled?)
                                  (cond-> prod-node?
                                          (assoc-in [:then-queue index] true)))))
                  (cond-> prod-node?
@@ -386,20 +403,24 @@
   (let [conditions (:conditions rule)
         conditions (assoc-in conditions [(dec (count conditions)) :rule-name] (:name rule))
         rule-fn-path [:rule-fns (:name rule)]
-        session (reduce add-condition session conditions)]
+        session (reduce add-condition session conditions)
+        mem-node-id (:mem-node-id session)]
     (when (get-in session rule-fn-path)
       (throw (ex-info (str (:name rule) " already exists in session") {})))
     (-> session
-        (assoc-in [:rule-ids (:name rule)] (:mem-node-id session))
+        (assoc-in [:beta-nodes mem-node-id :filter-fn] (:filter-fn rule))
+        (assoc-in [:rule-ids (:name rule)] mem-node-id)
         (dissoc :mem-node-id) ;; assoc'ed by add-condition
         (assoc-in rule-fn-path (:rule-fn rule)))))
 
 (defmacro ruleset [rules]
   (reduce
-    (fn [v [rule-name conditions fn-arg fn-body]]
+    (fn [v {:keys [rule-name conditions then-body when-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition ~conditions)
-                       (fn [~fn-arg] ~@fn-body))))
+                       (fn [~arg] ~@then-body)
+                       ~(when when-body
+                          `(fn [~arg] ~when-body)))))
     []
     (mapv ->rule (parse ::rules rules))))
 
@@ -476,7 +497,13 @@
   (let [rule-id (or (get-in session [:rule-ids rule-name])
                       (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
-    (:vars rule)))
+    (reduce-kv
+      (fn [v i var-map]
+        (if (nth (:enabled rule) i)
+          (conj v var-map)
+          v))
+      []
+      (:vars rule))))
 
 (s/fdef query
   :args (s/cat :session ::session
