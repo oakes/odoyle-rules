@@ -436,3 +436,29 @@
          (is (= ::charlie (:id (o/query session ::rule1))))
          session))))
 
+(deftest multiple-joins
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [pid ::kind :player]
+            [pid ::color pcolor]
+            [pid ::height pheight]
+            [eid ::kind kind]
+            [eid ::color ecolor {:then false}]
+            [eid ::height eheight {:then false}]
+            :when
+            (not= kind :player)
+            :then
+            (o/insert! eid ::color "green")
+            (o/insert! eid ::height 70)]}))
+      (o/insert 1 {::kind :player
+                   ::color "red"
+                   ::height 72})
+      (o/insert 2 {::kind :enemy
+                   ::color "blue"
+                   ::height 60})
+      ((fn [session]
+         (is (= "green" (:ecolor (o/query session ::rule1))))
+         session))))
+

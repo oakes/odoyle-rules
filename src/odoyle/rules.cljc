@@ -207,19 +207,18 @@
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
     (fn [m cond-var]
-      (let [var-key (:key cond-var)
-            existing-val (get m var-key)]
+      (let [var-key (:key cond-var)]
         (case (:field cond-var)
           :id
-          (if (and (some? existing-val)
-                   (not= existing-val (:id fact)))
+          (if (and (contains? m var-key)
+                   (not= (get m var-key) (:id fact)))
             (reduced nil)
             (assoc m var-key (:id fact)))
           :attr
           (throw (ex-info "Attributes cannot contain vars" {}))
           :value
-          (if (and (some? existing-val)
-                   (not= existing-val (:value fact)))
+          (if (and (contains? m var-key)
+                   (not= (get m var-key) (:value fact)))
             (reduced nil)
             (assoc m var-key (:value fact))))))
     vars
@@ -307,23 +306,30 @@
             (left-activate-join-node $ join-node-id vars token)
             $))))
 
+(defn- set-trigger [session prod-node-id trigger?]
+  (if trigger?
+    (assoc-in session [:beta-nodes prod-node-id :trigger] true)
+    session))
+
 (defn- right-activate-join-node [session node-id token]
   (let [node (get-in session [:beta-nodes node-id])
-        session (if (and (#{:insert :update} (:kind token))
-                         (-> node :condition :opts :then (not= false)))
-                  (assoc-in session [:beta-nodes (:prod-node-id node) :trigger] true)
-                  session)]
+        trigger? (and (#{:insert :update} (:kind token))
+                      (-> node :condition :opts :then (not= false)))]
     (if-let [parent-id (:parent-id node)]
       (reduce
         (fn [session existing-vars]
           (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
-            (left-activate-memory-node session (:child-id node) vars token)
+            (-> session
+                (set-trigger (:prod-node-id node) trigger?)
+                (left-activate-memory-node (:child-id node) vars token))
             session))
         session
         (:vars (get-in session [:beta-nodes parent-id])))
       ;; root node
       (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
-        (left-activate-memory-node session (:child-id node) vars token)
+        (-> session
+            (set-trigger (:prod-node-id node) trigger?)
+            (left-activate-memory-node (:child-id node) vars token))
         session))))
 
 (defn- right-activate-alpha-node [session node-path token]
