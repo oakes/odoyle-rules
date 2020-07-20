@@ -1,6 +1,6 @@
 (require
   'examples.odoyle
-  #_[figwheel.main :as figwheel])
+  '[figwheel.main :as figwheel])
 
-;(figwheel/-main "--build" "dev")
+(figwheel/-main "--build" "dev")
 

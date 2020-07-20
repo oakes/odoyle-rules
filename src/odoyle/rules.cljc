@@ -42,10 +42,10 @@
                   kind ;; :insert, :retract, :update
                   old-fact ;; only used when updating
                   ])
-(defrecord Var [field ;; :id, :attr, or :value
-                sym ;; symbol
-                key ;; keyword
-                ])
+(defrecord Binding [field ;; :id, :attr, or :value
+                    sym ;; symbol
+                    key ;; keyword
+                    ])
 (defrecord AlphaNode [path ;; the get-in vector to reach this node from the root
                       test-field ;; :id, :attr, or :value
                       test-value ;; anything
@@ -73,7 +73,7 @@
                      disable-fast-updates ;; boolean indicating if it isn't safe to do fast updates
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
-                      vars ;; vector of Var
+                      bindings ;; vector of Binding
                       opts ;; map of options
                       rule-name ;; keyword
                       ])
@@ -93,7 +93,7 @@
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
-    :binding (update condition :vars conj (->Var field value (keyword value)))
+    :binding (update condition :bindings conj (->Binding field value (keyword value)))
     :value (update condition :nodes conj (map->AlphaNode {:path nil
                                                           :test-field field
                                                           :test-value value
@@ -102,7 +102,7 @@
                                                           :facts {}}))))
 
 (defn- ->condition [{:keys [id attr value opts]}]
-  (-> {:vars [] :nodes [] :opts opts}
+  (-> {:bindings [] :nodes [] :opts opts}
       (add-to-condition :id id)
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
@@ -118,13 +118,12 @@
         then-body (if (some? when-body)
                     [`(when ~when-body ~@then-body)]
                     then-body)
-        vars (->> conditions
-                  (mapcat :vars)
-                  (mapv :sym))
-        arg {:keys vars}]
+        syms (->> conditions
+                  (mapcat :bindings)
+                  (mapv :sym))]
     {:rule-name rule-name
      :conditions conditions
-     :arg arg
+     :arg {:keys syms}
      :when-body when-body
      :then-body then-body}))
 
@@ -198,13 +197,13 @@
                                    [join-node-id])))
         (update :bindings (fn [bindings]
                             (reduce
-                              (fn [bindings var-key]
-                                (if (contains? (:all bindings) var-key)
-                                  (update bindings :joins conj var-key)
-                                  (update bindings :all conj var-key)))
+                              (fn [bindings k]
+                                (if (contains? (:all bindings) k)
+                                  (update bindings :joins conj k)
+                                  (update bindings :all conj k)))
                               (or bindings
                                   {:all #{} :joins #{}})
-                              (->> condition :vars (map :key))))))))
+                              (->> condition :bindings (map :key))))))))
 
 (defn- get-vars-from-fact [vars condition fact]
   (reduce
@@ -225,7 +224,7 @@
             (reduced nil)
             (assoc m var-key (:value fact))))))
     vars
-    (:vars condition)))
+    (:bindings condition)))
 
 (defn- dissoc-vec [v index]
   (let [v1 (subvec v 0 index)
@@ -477,7 +476,7 @@
                                               :disable-fast-updates (contains? (:joins bindings)
                                                                                (some (fn [{:keys [field key]}]
                                                                                        (when (= :value field) key))
-                                                                                     (-> join-node :condition :vars)))))))
+                                                                                     (-> join-node :condition :bindings)))))))
                         session
                         (:join-node-ids session))]
     (-> session
@@ -491,7 +490,7 @@
   (reduce
     (fn [v {:keys [rule-name conditions then-body when-body arg]}]
       (conj v `(->Rule ~rule-name
-                       (mapv map->Condition ~conditions)
+                       (mapv map->Condition '~conditions)
                        (fn [~arg] ~@then-body)
                        ~(when (some? when-body)
                           `(fn [~arg] ~when-body)))))
