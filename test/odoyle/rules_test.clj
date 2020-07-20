@@ -325,3 +325,49 @@
            (is (= 3 @*count))
            session)))))
 
+(deftest inserting-inside-a-rule-cascades
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::color "blue"]
+            :then
+            (o/insert! ::charlie ::right-of ::bob)]
+           ::rule2
+           [:what
+            [c ::right-of b]
+            :then
+            (o/insert! b ::left-of c)]
+           ::rule3
+           [:what
+            [b ::left-of c]]}))
+      (o/insert ::bob ::color "blue")
+      ((fn [session]
+         (is (= 1 (count (o/query-all session ::rule1))))
+         (is (= 1 (count (o/query-all session ::rule2))))
+         (is (= 1 (count (o/query-all session ::rule3))))
+         session))))
+
+(deftest conditions-can-use-external-values
+  (let [*allow-rule-to-fire (atom false)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::rule1
+             [:what
+              [a ::left-of b]
+              :when
+              @*allow-rule-to-fire]}))
+        (o/insert ::alice ::left-of ::zach)
+        ((fn [session]
+           (reset! *allow-rule-to-fire true)
+           session))
+        (o/insert ::alice ::left-of ::bob)
+        ((fn [session]
+           (is (= 1 (count (o/query-all session ::rule1))))
+           (reset! *allow-rule-to-fire false)
+           session))
+        (o/insert ::alice ::left-of ::zach)
+        ((fn [session]
+           (is (= 0 (count (o/query-all session ::rule1))))
+           session)))))
+
