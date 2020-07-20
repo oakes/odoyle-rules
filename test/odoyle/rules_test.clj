@@ -371,3 +371,26 @@
            (is (= 0 (count (o/query-all session ::rule1))))
            session)))))
 
+(deftest id+attr-combos-can-be-stored-in-multiple-alpha-nodes
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::get-alice
+           [:what
+            [::alice ::color color]
+            [::alice ::height height]]
+           ::get-person
+           [:what
+            [id ::color color]
+            [id ::height height]]}))
+      (o/insert ::alice ::color "blue")
+      (o/insert ::alice ::height 60)
+      ((fn [session]
+         (let [alice (o/query session ::get-alice)]
+           (is (= "blue" (:color alice)))
+           (is (= 60 (:height alice))))
+         session))
+      (o/retract ::alice ::color)
+      ((fn [session]
+         (is (= 0 (count (o/query-all session ::get-alice))))
+         session))))
+
