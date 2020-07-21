@@ -25,4 +25,5 @@
             (o/insert ::yair ::right-of ::bob)
             (o/insert ::xavier ::height 72)
             (o/insert ::thomas ::height 72)
-            (o/insert ::george ::height 72))))))
+            (o/insert ::george ::height 72)
+            o/fire-rules)))))

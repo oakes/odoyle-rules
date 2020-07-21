@@ -389,42 +389,6 @@
             $
             (:successors (get-in session node-path))))))
 
-(def ^:private ^:dynamic *session* nil)
-
-(defn- trigger-then-blocks [{:keys [then-nodes] :as session}]
-  (if (and (seq then-nodes)
-           ;; don't trigger :then blocks while inside a rule
-           (nil? *session*))
-    (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
-          session (reduce
-                    (fn [session node-id]
-                      (let [node-path [:beta-nodes node-id]
-                            node (get-in session node-path)
-                            {:keys [then-queue rule-name vars]} node
-                            rule-fn (or (get-in session [:rule-fns rule-name])
-                                        (throw (ex-info (str rule-name " not found") {})))
-                            session (update-in session node-path assoc :trigger false)]
-                        (reduce-kv
-                          (fn [session i trigger?]
-                            (when trigger?
-                              (vswap! *trigger-queue conj [rule-fn (nth vars i)]))
-                            (update-in session node-path assoc-in [:then-queue i] false))
-                          session
-                          then-queue)))
-                    session
-                    then-nodes)
-          session (assoc session :then-nodes #{})]
-      (->> @*trigger-queue
-           (reduce
-             (fn [session [rule-fn args]]
-               (binding [*session* (volatile! session)]
-                 (rule-fn args)
-                 @*session*))
-             session)
-           ;; recur because there may be new :then blocks to execute
-           trigger-then-blocks))
-    session))
-
 (defn- get-alpha-nodes-for-fact [session alpha-node id attr value root?]
   (if root?
     (reduce
@@ -476,7 +440,46 @@
         session
         node-paths))))
 
+(def ^:private ^:dynamic *session* nil)
+
 ;; public
+
+(s/fdef fire-rules
+  :args (s/cat :session ::session))
+
+(defn fire-rules [{:keys [then-nodes] :as session}]
+  (if (and (seq then-nodes)
+           ;; don't trigger :then blocks while inside a rule
+           (nil? *session*))
+    (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
+          session (reduce
+                    (fn [session node-id]
+                      (let [node-path [:beta-nodes node-id]
+                            node (get-in session node-path)
+                            {:keys [then-queue rule-name vars]} node
+                            rule-fn (or (get-in session [:rule-fns rule-name])
+                                        (throw (ex-info (str rule-name " not found") {})))
+                            session (update-in session node-path assoc :trigger false)]
+                        (reduce-kv
+                          (fn [session i trigger?]
+                            (when trigger?
+                              (vswap! *trigger-queue conj [rule-fn (nth vars i)]))
+                            (update-in session node-path assoc-in [:then-queue i] false))
+                          session
+                          then-queue)))
+                    session
+                    then-nodes)
+          session (assoc session :then-nodes #{})]
+      (->> @*trigger-queue
+           (reduce
+             (fn [session [rule-fn args]]
+               (binding [*session* (volatile! session)]
+                 (rule-fn args)
+                 @*session*))
+             session)
+           ;; recur because there may be new :then blocks to execute
+           fire-rules))
+    session))
 
 (defn add-rule [session rule]
   (when (get-in session [:rule-fns (:name rule)])
@@ -579,8 +582,7 @@
               session attr->value))
   ([session id attr value]
    (->> (get-alpha-nodes-for-fact session (:alpha-node session) id attr value true)
-        (upsert-fact session id attr value)
-        trigger-then-blocks)))
+        (upsert-fact session id attr value))))
 
 (s/def ::insert!-args
   (s/or

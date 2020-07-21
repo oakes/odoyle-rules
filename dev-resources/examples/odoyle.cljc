@@ -31,6 +31,7 @@
       ;(o/insert ::enemy {::x 1 ::y 1 ::health 10})
       ;(o/insert ::enemy {::x 2 ::y 2 ::health 10})
       ;(o/insert ::enemy {::x 2 ::y 2 ::health 10})
+      o/fire-rules
       atom))
 
 (defn print-node [node level]

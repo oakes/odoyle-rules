@@ -27,6 +27,7 @@
       (o/insert ::xavier ::height 72)
       (o/insert ::thomas ::height 72)
       (o/insert ::george ::height 72)
+      o/fire-rules
       ((fn [session]
          (is (= 3 (count (o/query-all session ::num-conds-and-facts))))
          session))))
@@ -61,6 +62,7 @@
       (o/insert ::yair ::right-of ::bob)
       (o/insert ::alice ::left-of ::david)
       (o/insert ::david ::color "white")
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::out-of-order))))
          session))))
@@ -75,11 +77,13 @@
             [y ::color c]]}))
       (o/insert ::bob ::self ::bob)
       (o/insert ::bob ::color "red")
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::duplicate-facts))))
          (is (= "red" (:c (o/query session ::duplicate-facts))))
          session))
       (o/insert ::bob ::color "green")
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::duplicate-facts))))
          (is (= "green" (:c (o/query session ::duplicate-facts))))
@@ -98,6 +102,7 @@
       (o/insert ::yair ::left-of ::zach)
       (o/insert ::alice ::color "maize")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::removing-facts))))
          session))
@@ -108,6 +113,7 @@
       (o/retract ::bob ::color)
       (o/insert ::bob ::color "blue")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::removing-facts))))
          session))))
@@ -125,11 +131,13 @@
       (o/insert ::yair ::left-of ::zach)
       (o/insert ::alice ::color "maize")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::updating-facts))))
          (is (= ::zach (:z (o/query session ::updating-facts))))
          session))
       (o/insert ::yair ::left-of ::xavier)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::updating-facts))))
          (is (= ::xavier (:z (o/query session ::updating-facts))))
@@ -148,10 +156,12 @@
       (o/insert ::yair ::left-of ::zach)
       (o/insert ::alice ::color "maize")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::updating-facts-diff-nodes))))
          session))
       (o/insert ::yair ::left-of ::xavier)
+      o/fire-rules
       ((fn [session]
          (is (= 0 (count (o/query-all session ::updating-facts-diff-nodes))))
          session))))
@@ -166,6 +176,7 @@
            [:what
             [a ::left-of z]]}))
       (o/insert ::alice ::left-of ::zach)
+      o/fire-rules
       ((fn [session]
          (is (= ::alice (:a (o/query session ::rule1))))
          (is (= ::zach (:z (o/query session ::rule2))))
@@ -186,10 +197,12 @@
       (o/insert ::yair ::left-of ::zach)
       (o/insert ::alice ::color "maize")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 0 (count (o/query-all session ::complex-cond))))
          session))
       (o/insert ::yair ::left-of ::charlie)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::complex-cond))))
          session))))
@@ -205,6 +218,7 @@
       (o/insert ::bob ::right-of ::alice)
       (o/insert ::bob ::color "blue")
       (o/insert ::yair ::right-of ::bob)
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::rule1))))
          session))))
@@ -221,6 +235,7 @@
               :then
               (swap! *count inc)]}))
         (o/insert ::bob ::color "blue")
+        o/fire-rules
         ((fn [session]
            (is (= 0 @*count))
            session)))))
@@ -242,6 +257,7 @@
       (o/insert ::charlie ::color "red")
       (o/insert ::charlie ::left-of ::alice)
       (o/insert ::charlie ::height 72)
+      o/fire-rules
       ((fn [session]
          (is (= 3 (count (o/query-all session ::get-person))))
          (is (= ::charlie (:id (o/query session ::get-person))))
@@ -267,7 +283,8 @@
       (o/insert ::bob ::color "blue")
       (o/insert ::bob ::right-of ::alice)
       (o/insert ::alice ::color "red")
-      (o/insert ::alice ::left-of ::bob)))
+      (o/insert ::alice ::left-of ::bob)
+      o/fire-rules))
 
 (deftest dont-trigger-rule-when-updating-certain-facts
   (let [*count (atom 0)]
@@ -280,8 +297,11 @@
               :then
               (swap! *count inc)]}))
         (o/insert ::bob ::color "blue")
+        o/fire-rules
         (o/insert ::alice ::color "red")
+        o/fire-rules
         (o/insert ::alice ::color "maize")
+        o/fire-rules
         ((fn [session]
            (is (= 1 @*count))
            session)))))
@@ -297,6 +317,7 @@
             (o/insert! ::alice ::color "maize")]}))
       (o/insert ::bob ::color "blue")
       (o/insert ::alice ::color "red")
+      o/fire-rules
       ((fn [session]
          (is (= "maize" (:c (o/query session ::rule1))))
          session))))
@@ -321,6 +342,7 @@
               (swap! *count inc)]}))
         (o/insert ::alice ::color "red")
         (o/insert ::bob ::color "blue")
+        o/fire-rules
         ((fn [session]
            (is (= 3 @*count))
            session)))))
@@ -342,6 +364,7 @@
            [:what
             [b ::left-of c]]}))
       (o/insert ::bob ::color "blue")
+      o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::rule1))))
          (is (= 1 (count (o/query-all session ::rule2))))
@@ -358,15 +381,18 @@
               :when
               @*allow-rule-to-fire]}))
         (o/insert ::alice ::left-of ::zach)
+        o/fire-rules
         ((fn [session]
            (reset! *allow-rule-to-fire true)
            session))
         (o/insert ::alice ::left-of ::bob)
+        o/fire-rules
         ((fn [session]
            (is (= 1 (count (o/query-all session ::rule1))))
            (reset! *allow-rule-to-fire false)
            session))
         (o/insert ::alice ::left-of ::zach)
+        o/fire-rules
         ((fn [session]
            (is (= 0 (count (o/query-all session ::rule1))))
            session)))))
@@ -384,6 +410,7 @@
             [id ::height height]]}))
       (o/insert ::alice ::color "blue")
       (o/insert ::alice ::height 60)
+      o/fire-rules
       ((fn [session]
          (let [alice (o/query session ::get-alice)]
            (is (= "blue" (:color alice)))
@@ -413,7 +440,8 @@
       (o/insert ::yair ::left-of 1)
       (o/insert ::alice ::color "maize")
       (o/insert ::yair ::right-of ::bob)
-      (o/insert 1 ::left-of ::bob)))
+      (o/insert 1 ::left-of ::bob)
+      o/fire-rules))
 
 (deftest dont-use-the-fast-update-mechanism-if-its-part-of-a-join
   (-> (reduce o/add-rule (o/->session)
@@ -428,10 +456,12 @@
       (o/insert ::charlie ::color "green")
       (o/insert ::charlie ::height 72)
       (o/insert ::bob ::left-of ::alice)
+      o/fire-rules
       ((fn [session]
          (is (= ::alice (:id (o/query session ::rule1))))
          session))
       (o/insert ::bob ::left-of ::charlie)
+      o/fire-rules
       ((fn [session]
          (is (= ::charlie (:id (o/query session ::rule1))))
          session))))
@@ -458,6 +488,7 @@
       (o/insert 2 {::kind :enemy
                    ::color "blue"
                    ::height 60})
+      o/fire-rules
       ((fn [session]
          (is (= "green" (:ecolor (o/query session ::rule1))))
          session))))
