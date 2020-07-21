@@ -46,6 +46,10 @@
                     sym ;; symbol
                     key ;; keyword
                     ])
+(defrecord Match [vars ;; map of binding keywords -> values from facts
+                  enabled ;; boolean indicating if this match should be returned in queries
+                  trigger ;; boolean indicating if this match should trigger :then blocks
+                  ])
 (defrecord AlphaNode [path ;; the get-in vector to reach this node from the root
                       test-field ;; :id, :attr, or :value
                       test-value ;; anything
@@ -59,7 +63,7 @@
                        leaf-node-id ;; id of the MemoryNode at the end (same as id if this is the leaf node)
                        condition ;; Condition associated with this node
                        rule-name ;; keyword
-                       matches ;; map of id+attr -> (map of keyword -> value)
+                       matches ;; map of id+attrs -> Match
                        filter-fn ;; the :when condition in a function
                        trigger ;; boolean indicating that the :then block can be triggered
                        ])
@@ -280,7 +284,7 @@
             (:insert :update)
             (-> $
                 (update-in node-path assoc-in [:matches id+attrs]
-                           {:vars vars :enabled? enabled? :trigger? trigger?})
+                           (->Match vars enabled? trigger?))
                 (cond-> (and leaf-node? trigger?)
                         (update :then-nodes conj node-id)))
             :retract
@@ -416,8 +420,8 @@
                                         (throw (ex-info (str rule-name " not found") {})))
                             session (update-in session node-path assoc :trigger false)]
                         (reduce-kv
-                          (fn [session _ {:keys [vars trigger?]}]
-                            (when trigger?
+                          (fn [session _ {:keys [vars trigger]}]
+                            (when trigger
                               (vswap! *trigger-queue conj [rule-fn vars]))
                             session)
                           session
@@ -589,8 +593,8 @@
                     (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
     (reduce-kv
-      (fn [v _ {:keys [vars enabled?]}]
-        (if enabled?
+      (fn [v _ {:keys [vars enabled]}]
+        (if enabled
           (conj v vars)
           v))
       []
