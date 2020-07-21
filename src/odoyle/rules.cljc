@@ -222,11 +222,6 @@
     vars
     (:bindings condition)))
 
-(defn- dissoc-vec [v ^long index]
-  (let [v1 (subvec v 0 index)
-        v2 (subvec v (inc index))]
-    (into (into [] v1) v2)))
-
 (declare left-activate-memory-node)
 
 (defn- left-activate-join-node [session node-id vars token]
