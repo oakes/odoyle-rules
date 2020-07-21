@@ -112,9 +112,6 @@
                     (cons 'and when-body)
                     (first when-body))
         then-body (:body then-block)
-        then-body (if (some? when-body)
-                    [`(when ~when-body ~@then-body)]
-                    then-body)
         syms (->> conditions
                   (mapcat :bindings)
                   (map :sym)
