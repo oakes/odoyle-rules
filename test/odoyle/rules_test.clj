@@ -493,3 +493,21 @@
          (is (= "green" (:ecolor (o/query session ::rule1))))
          session))))
 
+(deftest join-followed-by-non-join
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [id ::x x]
+            [id ::y y]
+            [id ::xv xv]
+            [id ::yv yv]
+            [::bob ::left-of z]]}))
+      (o/insert ::bob ::left-of ::zach)
+      (o/insert ::alice {::x 0 ::y 0 ::xv 1 ::yv 1})
+      (o/insert ::charlie {::x 1 ::y 1 ::xv 0 ::yv 0})
+      o/fire-rules
+      ((fn [session]
+         (is (= 2 (count (o/query-all session ::rule1))))
+         session))))
+
