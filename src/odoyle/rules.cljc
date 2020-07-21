@@ -236,9 +236,7 @@
       (reduce
         (fn [session alpha-fact]
           (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-            (let [{:keys [id attr] :as fact} alpha-fact
-                  id+attr [id attr]]
-              (left-activate-memory-node session (:child-id join-node) (conj id+attrs id+attr) new-vars (assoc token :fact alpha-fact) false))
+            (left-activate-memory-node session (:child-id join-node) (conj id+attrs ((juxt :id :attr) alpha-fact)) new-vars (assoc token :fact alpha-fact) false)
             session))
         session
         (vals (get-in alpha-node [:facts id])))
@@ -247,9 +245,7 @@
           (reduce
             (fn [session alpha-fact]
               (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-                (let [{:keys [id attr] :as fact} alpha-fact
-                      id+attr [id attr]]
-                  (left-activate-memory-node session (:child-id join-node) (conj id+attrs id+attr) new-vars (assoc token :fact alpha-fact) false))
+                (left-activate-memory-node session (:child-id join-node) (conj id+attrs ((juxt :id :attr) alpha-fact)) new-vars (assoc token :fact alpha-fact) false)
                 session))
             session
             (vals attr->fact)))
@@ -296,10 +292,8 @@
             (left-activate-join-node $ join-node-id id+attrs vars token)
             $))))
 
-(defn- right-activate-join-node [session node-id token]
-  (let [{:keys [id attr] :as fact} (:fact token)
-        id+attr [id attr]
-        node (get-in session [:beta-nodes node-id])]
+(defn- right-activate-join-node [session node-id id+attr token]
+  (let [node (get-in session [:beta-nodes node-id])]
     (if-let [parent-id (:parent-id node)]
       (reduce-kv
         (fn [session id+attrs {existing-vars :vars}]
@@ -344,7 +338,7 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (right-activate-join-node session child-id token))
+              (right-activate-join-node session child-id id+attr token))
             $
             (:successors (get-in session node-path))))))
 
