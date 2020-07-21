@@ -120,7 +120,9 @@
                     then-body)
         syms (->> conditions
                   (mapcat :bindings)
-                  (mapv :sym))]
+                  (map :sym)
+                  set
+                  vec)]
     {:rule-name rule-name
      :conditions conditions
      :arg {:keys syms}
