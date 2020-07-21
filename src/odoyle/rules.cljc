@@ -59,10 +59,7 @@
                        leaf-node-id ;; id of the MemoryNode at the end (same as id if this is the leaf node)
                        condition ;; Condition associated with this node
                        rule-name ;; keyword
-                       vars ;; vector of (map of keyword -> value)
-                       id-attrs ;; vector of id+attr
-                       enabled ;; vector of booleans
-                       then-queue ;; vector of booleans
+                       matches ;; map of id+attr -> (map of keyword -> value)
                        filter-fn ;; the :when condition in a function
                        trigger ;; boolean indicating that the :then block can be triggered
                        ])
@@ -71,7 +68,6 @@
                      child-id ;; MemoryNode id
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition associated with this node
-                     disable-fast-updates ;; boolean indicating if it isn't safe to do fast updates
                      id-key ;; the name of the id binding if we know it
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
@@ -169,17 +165,13 @@
                                    :leaf-node-id nil
                                    :condition condition
                                    :rule-name nil
-                                   :vars []
-                                   :id-attrs []
-                                   :enabled []
-                                   :then-queue []
+                                   :matches {}
                                    :trigger false})
         join-node (map->JoinNode {:id join-node-id
                                   :parent-id parent-mem-node-id
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
                                   :condition condition
-                                  :disable-fast-updates false
                                   :id-key nil})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
@@ -291,44 +283,13 @@
                       enabled?)]
     (as-> session $
           (case (:kind token)
-            :insert
+            (:insert :update)
             (-> $
-                (update-in node-path
-                           (fn [node]
-                             (-> node
-                                 (update :vars conj vars)
-                                 (update :id-attrs conj id+attr)
-                                 (update :enabled conj enabled?)
-                                 (cond-> leaf-node?
-                                         (update :then-queue conj trigger?)))))
+                (update-in node-path assoc-in [:matches id+attr] {:vars vars :enabled? enabled? :trigger? trigger?})
                 (cond-> (and leaf-node? trigger?)
                         (update :then-nodes conj node-id)))
             :retract
-            (let [index (int (.indexOf (:id-attrs node) id+attr))]
-              (assert (>= index 0))
-              (update-in $ node-path
-                         (fn [node]
-                           (-> node
-                               (update :vars dissoc-vec index)
-                               (update :id-attrs dissoc-vec index)
-                               (update :enabled dissoc-vec index)
-                               (cond-> leaf-node?
-                                       (update :then-queue dissoc-vec index))))))
-            :update
-            (let [index (int (.indexOf (:id-attrs node) id+attr))]
-              (assert (>= index 0))
-              (-> $
-                 (update-in node-path
-                            (fn [node]
-                              (-> node
-                                 (assoc-in [:vars index] vars)
-                                 ;; no need to do this; the id+attr will not change
-                                 ;(assoc-in [:id-attrs index] id+attr)
-                                 (assoc-in [:enabled index] enabled?)
-                                 (cond-> leaf-node?
-                                         (assoc-in [:then-queue index] trigger?)))))
-                 (cond-> (and leaf-node? trigger?)
-                         (update :then-nodes conj node-id)))))
+            (update-in $ node-path update :matches dissoc id+attr))
           (if-let [join-node-id (:child-id node)]
             (left-activate-join-node $ join-node-id vars token)
             $))))
@@ -345,7 +306,10 @@
               (left-activate-memory-node session (:child-id node) vars token true)
               session)))
         session
-        (:vars (get-in session [:beta-nodes parent-id])))
+        (->> (get-in session [:beta-nodes parent-id])
+             :matches
+             vals
+             (map :vars)))
       ;; root node
       (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
         (left-activate-memory-node session (:child-id node) vars token true)
@@ -379,13 +343,7 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (let [node (get-in session [:beta-nodes child-id])]
-                (if (and (= :update (:kind token))
-                         (:disable-fast-updates node))
-                  (-> session
-                      (right-activate-join-node child-id (->Token (:old-fact token) :retract nil))
-                      (right-activate-join-node child-id (->Token (:fact token) :insert nil)))
-                  (right-activate-join-node session child-id token))))
+              (right-activate-join-node session child-id token))
             $
             (:successors (get-in session node-path))))))
 
@@ -456,17 +414,17 @@
                     (fn [session node-id]
                       (let [node-path [:beta-nodes node-id]
                             node (get-in session node-path)
-                            {:keys [then-queue rule-name vars]} node
+                            {:keys [matches rule-name]} node
                             rule-fn (or (get-in session [:rule-fns rule-name])
                                         (throw (ex-info (str rule-name " not found") {})))
                             session (update-in session node-path assoc :trigger false)]
                         (reduce-kv
-                          (fn [session i trigger?]
+                          (fn [session id+attr {:keys [vars trigger?]}]
                             (when trigger?
-                              (vswap! *trigger-queue conj [rule-fn (nth vars i)]))
-                            (update-in session node-path assoc-in [:then-queue i] false))
+                              (vswap! *trigger-queue conj [rule-fn vars]))
+                            session)
                           session
-                          then-queue)))
+                          matches)))
                     session
                     then-nodes)
           session (assoc session :then-nodes #{})]
@@ -500,9 +458,7 @@
                                               :leaf-node-id leaf-node-id))))
                         session
                         (:mem-node-ids session))
-        ;; update all join nodes with:
-        ;; 1. the name of the id binding, if it exists
-        ;; 2. whether to disable fast updates
+        ;; update all join nodes with the name of the id binding, if it exists
         session (reduce (fn [session join-node-id]
                           (update-in session [:beta-nodes join-node-id]
                                      (fn [join-node]
@@ -511,12 +467,7 @@
                                                               (when (and (= :id field)
                                                                          (contains? (:joins bindings) key))
                                                                 key))
-                                                            (-> join-node :condition :bindings))
-                                              ;; disable fast updates for facts whose value is part of a join
-                                              :disable-fast-updates (contains? (:joins bindings)
-                                                                               (some (fn [{:keys [field key]}]
-                                                                                       (when (= :value field) key))
-                                                                                     (-> join-node :condition :bindings)))))))
+                                                            (-> join-node :condition :bindings))))))
                         session
                         (:join-node-ids session))]
     (-> session
@@ -641,12 +592,12 @@
                     (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
     (reduce-kv
-      (fn [v i var-map]
-        (if (nth (:enabled rule) i)
-          (conj v var-map)
+      (fn [v id+attr {:keys [vars enabled?]}]
+        (if enabled?
+          (conj v vars)
           v))
       []
-      (:vars rule))))
+      (:matches rule))))
 
 (s/fdef query
   :args (s/cat :session ::session
