@@ -56,6 +56,8 @@
 (defrecord MemoryNode [id
                        parent-id ;; JoinNode id
                        child-id ;; JoinNode id
+                       leaf-node-id ;; id of the MemoryNode at the end (same as id if this is the leaf node)
+                       condition ;; Condition associated with this node
                        rule-name ;; keyword
                        vars ;; vector of (map of keyword -> value)
                        id-attrs ;; vector of id+attr
@@ -68,8 +70,7 @@
                      parent-id ;; MemoryNode id
                      child-id ;; MemoryNode id
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
-                     condition ;; Condition
-                     prod-node-id ;; id of the MemoryNode at the end of the chain
+                     condition ;; Condition associated with this node
                      disable-fast-updates ;; boolean indicating if it isn't safe to do fast updates
                      id-key ;; the name of the id binding if we know it
                      ])
@@ -161,10 +162,12 @@
         *last-id (volatile! (:last-id session))
         join-node-id (vswap! *last-id inc)
         mem-node-id (vswap! *last-id inc)
-        parent-mem-node-id (:mem-node-id session)
+        parent-mem-node-id (-> session :mem-node-ids last)
         mem-node (map->MemoryNode {:id mem-node-id
                                    :parent-id join-node-id
                                    :child-id nil
+                                   :leaf-node-id nil
+                                   :condition condition
                                    :rule-name nil
                                    :vars []
                                    :id-attrs []
@@ -176,7 +179,6 @@
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
                                   :condition condition
-                                  :prod-node-id nil
                                   :disable-fast-updates false
                                   :id-key nil})
         session (-> session
@@ -193,7 +195,10 @@
         (assoc :last-id @*last-id)
         ;; these are only being added temporarily
         ;; they will be removed later
-        (assoc :mem-node-id mem-node-id)
+        (update :mem-node-ids (fn [node-ids]
+                                (if node-ids
+                                  (conj node-ids mem-node-id)
+                                  [mem-node-id])))
         (update :join-node-ids (fn [node-ids]
                                  (if node-ids
                                    (conj node-ids join-node-id)
@@ -243,7 +248,7 @@
       (reduce
         (fn [session alpha-fact]
           (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-            (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
+            (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact) false)
             session))
         session
         (vals (get-in alpha-node [:facts id])))
@@ -252,23 +257,32 @@
           (reduce
             (fn [session alpha-fact]
               (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-                (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact))
+                (left-activate-memory-node session (:child-id join-node) new-vars (assoc token :fact alpha-fact) false)
                 session))
             session
             (vals attr->fact)))
         session
         (vals (:facts alpha-node))))))
 
-(defn- left-activate-memory-node [session node-id vars token]
+(defn- left-activate-memory-node [session node-id vars token from-alpha?]
   (let [{:keys [id attr] :as fact} (:fact token)
         id+attr [id attr]
         node-path [:beta-nodes node-id]
         node (get-in session node-path)
-        prod-node? (:rule-name node)
+        ;; if this token came directly from the alpha network
+        ;; and the condition doesn't have {:then false}
+        ;; set the trigger boolean so the :then block will run
+        session (if (and from-alpha?
+                         (#{:insert :update} (:kind token))
+                         (-> node :condition :opts :then (not= false)))
+                  (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
+                  session)
+        node (get-in session node-path) ;; get node again since trigger may have updated
+        leaf-node? (= (:id node) (:leaf-node-id node))
         ;; whether the matches in this node should
         ;; return in query results
         enabled? (boolean
-                   (or (not prod-node?)
+                   (or (not leaf-node?)
                        (nil? (:filter-fn node))
                        ((:filter-fn node) vars)))
         ;; whether the matches in this node should
@@ -285,9 +299,9 @@
                                  (update :vars conj vars)
                                  (update :id-attrs conj id+attr)
                                  (update :enabled conj enabled?)
-                                 (cond-> prod-node?
+                                 (cond-> leaf-node?
                                          (update :then-queue conj trigger?)))))
-                (cond-> (and prod-node? trigger?)
+                (cond-> (and leaf-node? trigger?)
                         (update :then-nodes conj node-id)))
             :retract
             (let [index (int (.indexOf (:id-attrs node) id+attr))]
@@ -298,7 +312,7 @@
                                (update :vars dissoc-vec index)
                                (update :id-attrs dissoc-vec index)
                                (update :enabled dissoc-vec index)
-                               (cond-> prod-node?
+                               (cond-> leaf-node?
                                        (update :then-queue dissoc-vec index))))))
             :update
             (let [index (int (.indexOf (:id-attrs node) id+attr))]
@@ -311,23 +325,16 @@
                                  ;; no need to do this; the id+attr will not change
                                  ;(assoc-in [:id-attrs index] id+attr)
                                  (assoc-in [:enabled index] enabled?)
-                                 (cond-> prod-node?
+                                 (cond-> leaf-node?
                                          (assoc-in [:then-queue index] trigger?)))))
-                 (cond-> (and prod-node? trigger?)
+                 (cond-> (and leaf-node? trigger?)
                          (update :then-nodes conj node-id)))))
           (if-let [join-node-id (:child-id node)]
             (left-activate-join-node $ join-node-id vars token)
             $))))
 
-(defn- set-trigger [session prod-node-id trigger?]
-  (if trigger?
-    (assoc-in session [:beta-nodes prod-node-id :trigger] true)
-    session))
-
 (defn- right-activate-join-node [session node-id token]
-  (let [node (get-in session [:beta-nodes node-id])
-        trigger? (and (#{:insert :update} (:kind token))
-                      (-> node :condition :opts :then (not= false)))]
+  (let [node (get-in session [:beta-nodes node-id])]
     (if-let [parent-id (:parent-id node)]
       (reduce
         (fn [session existing-vars]
@@ -335,17 +342,13 @@
           (if (some->> node :id-key (get existing-vars) (not= (-> token :fact :id)))
             session
             (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
-              (-> session
-                  (set-trigger (:prod-node-id node) trigger?)
-                  (left-activate-memory-node (:child-id node) vars token))
+              (left-activate-memory-node session (:child-id node) vars token true)
               session)))
         session
         (:vars (get-in session [:beta-nodes parent-id])))
       ;; root node
       (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
-        (-> session
-            (set-trigger (:prod-node-id node) trigger?)
-            (left-activate-memory-node (:child-id node) vars token))
+        (left-activate-memory-node session (:child-id node) vars token true)
         session))))
 
 (defn- right-activate-alpha-node [session node-path token]
@@ -480,22 +483,27 @@
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
         session (reduce add-condition session conditions)
-        ;; the "prod" node is the one at the end of the chain
-        ;; that contains the full results
-        prod-node-id (:mem-node-id session)
-        ;; let the prod node know what rule it is associated with
-        session (assoc-in session [:beta-nodes prod-node-id :rule-name] (:name rule))
+        leaf-node-id (-> session :mem-node-ids last)
         ;; the bindings (symbols) from the :what block
         bindings (:bindings session)
+        ;; update all memory nodes with:
+        ;; 1. the rule name
+        ;; 2. the id of their leaf node
+        session (reduce (fn [session mem-node-id]
+                          (update-in session [:beta-nodes mem-node-id]
+                                     (fn [mem-node]
+                                       (assoc mem-node
+                                              :rule-name (:name rule)
+                                              :leaf-node-id leaf-node-id))))
+                        session
+                        (:mem-node-ids session))
         ;; update all join nodes with:
-        ;; 1. the id of their prod node
-        ;; 2. the name of the id binding, if it exists
-        ;; 3. whether to disable fast updates
+        ;; 1. the name of the id binding, if it exists
+        ;; 2. whether to disable fast updates
         session (reduce (fn [session join-node-id]
                           (update-in session [:beta-nodes join-node-id]
                                      (fn [join-node]
                                        (assoc join-node
-                                              :prod-node-id prod-node-id
                                               :id-key (some (fn [{:keys [field key]}]
                                                               (when (and (= :id field)
                                                                          (contains? (:joins bindings) key))
@@ -509,11 +517,11 @@
                         session
                         (:join-node-ids session))]
     (-> session
-        (assoc-in [:beta-nodes prod-node-id :filter-fn] (:filter-fn rule))
-        (assoc-in [:rule-ids (:name rule)] prod-node-id)
+        (assoc-in [:beta-nodes leaf-node-id :filter-fn] (:filter-fn rule))
+        (assoc-in [:rule-ids (:name rule)] leaf-node-id)
         (assoc-in [:rule-fns (:name rule)] (:rule-fn rule))
         ;; assoc'ed by add-condition
-        (dissoc :mem-node-id :join-node-ids :bindings))))
+        (dissoc :mem-node-ids :join-node-ids :bindings))))
 
 (defmacro ruleset [rules]
   (reduce
