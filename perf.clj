@@ -9,12 +9,7 @@
             [y ::left-of z]
             [a ::color "maize"]
             [y ::right-of b]
-            [x ::height h]
-            :then
-            (= a ::alice)
-            (= b ::bob)
-            (= y ::yair)
-            (= z ::zach)]})))
+            [x ::height h]]})))
 
 (time
   (loop [counter 0
