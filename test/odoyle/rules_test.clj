@@ -443,7 +443,7 @@
       (o/insert 1 ::left-of ::bob)
       o/fire-rules))
 
-(deftest dont-use-the-fast-update-mechanism-if-its-part-of-a-join
+(deftest join-value-with-id
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
           {::rule1
@@ -458,12 +458,7 @@
       (o/insert ::bob ::left-of ::alice)
       o/fire-rules
       ((fn [session]
-         (is (= ::alice (:id (o/query session ::rule1))))
-         session))
-      (o/insert ::bob ::left-of ::charlie)
-      o/fire-rules
-      ((fn [session]
-         (is (= ::charlie (:id (o/query session ::rule1))))
+         (is (= 1 (count (o/query-all session ::rule1))))
          session))))
 
 (deftest multiple-joins
