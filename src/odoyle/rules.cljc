@@ -405,9 +405,11 @@
         session
         node-paths))))
 
-(def ^:private ^:dynamic *session* nil)
+(def ^:private ^:dynamic *mutable-session* nil)
 
 ;; public
+
+(def ^:dynamic *session* nil)
 
 (s/fdef fire-rules
   :args (s/cat :session ::session))
@@ -434,9 +436,10 @@
       (->> @*trigger-queue
            (reduce
              (fn [session [rule-fn args]]
-               (binding [*session* (volatile! session)]
+               (binding [*session* session
+                         *mutable-session* (volatile! session)]
                  (rule-fn args)
-                 @*session*))
+                 @*mutable-session*))
              session)
            ;; recur because there may be new :then blocks to execute
            fire-rules))
@@ -555,8 +558,8 @@
            (insert! id attr value))
          attr->value))
   ([id attr value]
-   (if *session*
-     (vswap! *session* insert id attr value)
+   (if *mutable-session*
+     (vswap! *mutable-session* insert id attr value)
      (throw (ex-info "This function must be called in a :then block" {})))))
 
 (s/fdef retract
@@ -582,8 +585,8 @@
                :attr qualified-keyword?))
 
 (defn retract! [id attr]
-  (if *session*
-    (vswap! *session* retract id attr)
+  (if *mutable-session*
+    (vswap! *mutable-session* retract id attr)
     (throw (ex-info "This function must be called in a :then block" {}))))
 
 (s/fdef query-all
