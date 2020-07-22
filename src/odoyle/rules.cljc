@@ -420,15 +420,11 @@
                             node (get-in session node-path)
                             {:keys [matches rule-name]} node
                             rule-fn (or (get-in session [:rule-fns rule-name])
-                                        (throw (ex-info (str rule-name " not found") {})))
-                            session (update-in session node-path assoc :trigger false)]
-                        (reduce-kv
-                          (fn [session _ {:keys [vars enabled]}]
-                            (when enabled
-                              (vswap! *trigger-queue conj [rule-fn vars]))
-                            session)
-                          session
-                          matches)))
+                                        (throw (ex-info (str rule-name " not found") {})))]
+                        (doseq [{:keys [vars enabled]} (vals matches)
+                                :when enabled]
+                          (vswap! *trigger-queue conj [rule-fn vars]))
+                        (update-in session node-path assoc :trigger false)))
                     session
                     then-nodes)
           session (assoc session :then-nodes #{})]
