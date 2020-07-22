@@ -122,6 +122,7 @@
                   set
                   vec)]
     {:rule-name rule-name
+     :fn-name (symbol (str (namespace rule-name) "-" (name rule-name)))
      :conditions conditions
      :arg {:keys syms}
      :when-body when-body
@@ -481,10 +482,10 @@
 
 (defmacro ruleset [rules]
   (reduce
-    (fn [v {:keys [rule-name conditions then-body when-body arg]}]
+    (fn [v {:keys [rule-name fn-name conditions then-body when-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition '~conditions)
-                       (fn ~(-> rule-name name symbol) [~arg] ~@then-body)
+                       (fn ~fn-name [~arg] ~@then-body)
                        ~(when (some? when-body)
                           `(fn [~arg] ~when-body)))))
     []
