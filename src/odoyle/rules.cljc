@@ -48,7 +48,6 @@
                     ])
 (defrecord Match [vars ;; map of binding keywords -> values from facts
                   enabled ;; boolean indicating if this match should be returned in queries
-                  trigger ;; boolean indicating if this match should trigger :then blocks
                   ])
 (defrecord AlphaNode [path ;; the get-in vector to reach this node from the root
                       test-field ;; :id, :attr, or :value
@@ -270,18 +269,14 @@
         enabled? (boolean
                    (or (not leaf-node?)
                        (nil? (:filter-fn node))
-                       ((:filter-fn node) vars)))
-        ;; whether the matches in this node should
-        ;; trigger :then blocks
-        trigger? (and (:trigger node)
-                      enabled?)]
+                       ((:filter-fn node) vars)))]
     (as-> session $
           (case (:kind token)
             (:insert :update)
             (-> $
                 (update-in node-path assoc-in [:matches id+attrs]
-                           (->Match vars enabled? trigger?))
-                (cond-> (and leaf-node? trigger?)
+                           (->Match vars enabled?))
+                (cond-> (and leaf-node? (:trigger node))
                         (update :then-nodes conj node-id)))
             :retract
             (update-in $ node-path update :matches
@@ -414,8 +409,8 @@
                                         (throw (ex-info (str rule-name " not found") {})))
                             session (update-in session node-path assoc :trigger false)]
                         (reduce-kv
-                          (fn [session _ {:keys [vars trigger]}]
-                            (when trigger
+                          (fn [session _ {:keys [vars enabled]}]
+                            (when enabled
                               (vswap! *trigger-queue conj [rule-fn vars]))
                             session)
                           session
