@@ -484,7 +484,7 @@
     (fn [v {:keys [rule-name conditions then-body when-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition '~conditions)
-                       (fn [~arg] ~@then-body)
+                       (fn ~(-> rule-name name symbol) [~arg] ~@then-body)
                        ~(when (some? when-body)
                           `(fn [~arg] ~when-body)))))
     []
