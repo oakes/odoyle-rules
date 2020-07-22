@@ -1,6 +1,7 @@
 (ns odoyle.rules
   (:require [clojure.spec.alpha :as s]
-            [expound.alpha :as expound]))
+            [expound.alpha :as expound]
+            [clojure.string :as str]))
 
 ;; parsing
 
@@ -122,7 +123,9 @@
                   set
                   vec)]
     {:rule-name rule-name
-     :fn-name (symbol (str (namespace rule-name) "." (name rule-name)))
+     :fn-name (-> (str (namespace rule-name) "-" (name rule-name))
+                  (str/replace "." "-")
+                  symbol)
      :conditions conditions
      :arg {:keys syms}
      :when-body when-body
