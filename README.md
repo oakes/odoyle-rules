@@ -2,6 +2,12 @@
 
 O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules engine for Clojure and ClojureScript. Stop being one of those jabronis that don't rule things. When I was a kid in Virginia our teacher tried to teach us the names of cities in our state by letting us be the "rulers" of them. My buddy Roger said he ruled Richmond. I said I ruled Chicago because I was a Bulls fan and didn't understand geography. I don't recall why I'm telling you this.
 
+## Documentation
+
+* [API docs](https://oakes.github.io/odoyle-rules/)
+* The [dungeon crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler) game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
+* The tutorial below
+
 ## Comparison to Clara
 
 O'Doyle is different than [Clara](https://www.clara-rules.org/) in a few ways.
