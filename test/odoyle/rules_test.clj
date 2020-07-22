@@ -80,13 +80,13 @@
       o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::duplicate-facts))))
-         (is (= "red" (:c (o/query session ::duplicate-facts))))
+         (is (= "red" (:c (first (o/query-all session ::duplicate-facts)))))
          session))
       (o/insert ::bob ::color "green")
       o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::duplicate-facts))))
-         (is (= "green" (:c (o/query session ::duplicate-facts))))
+         (is (= "green" (:c (first (o/query-all session ::duplicate-facts)))))
          session))))
 
 (deftest removing-facts
@@ -134,13 +134,13 @@
       o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::updating-facts))))
-         (is (= ::zach (:z (o/query session ::updating-facts))))
+         (is (= ::zach (:z (first (o/query-all session ::updating-facts)))))
          session))
       (o/insert ::yair ::left-of ::xavier)
       o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::updating-facts))))
-         (is (= ::xavier (:z (o/query session ::updating-facts))))
+         (is (= ::xavier (:z (first (o/query-all session ::updating-facts)))))
          session))))
 
 (deftest updating-facts-in-different-alpha-nodes
@@ -178,8 +178,8 @@
       (o/insert ::alice ::left-of ::zach)
       o/fire-rules
       ((fn [session]
-         (is (= ::alice (:a (o/query session ::rule1))))
-         (is (= ::zach (:z (o/query session ::rule2))))
+         (is (= ::alice (:a (first (o/query-all session ::rule1)))))
+         (is (= ::zach (:z (first (o/query-all session ::rule2)))))
          session))))
 
 (deftest complex-conditions
@@ -260,7 +260,6 @@
       o/fire-rules
       ((fn [session]
          (is (= 3 (count (o/query-all session ::get-person))))
-         (is (= ::charlie (:id (o/query session ::get-person))))
          session))))
 
 (deftest creating-a-ruleset
@@ -319,7 +318,7 @@
       (o/insert ::alice ::color "red")
       o/fire-rules
       ((fn [session]
-         (is (= "maize" (:c (o/query session ::rule1))))
+         (is (= "maize" (:c (first (o/query-all session ::rule1)))))
          session))))
 
 (deftest inserting-inside-a-rule-can-trigger-more-than-once
@@ -412,7 +411,7 @@
       (o/insert ::alice ::height 60)
       o/fire-rules
       ((fn [session]
-         (let [alice (o/query session ::get-alice)]
+         (let [alice (first (o/query-all session ::get-alice))]
            (is (= "blue" (:color alice)))
            (is (= 60 (:height alice))))
          session))
@@ -485,7 +484,7 @@
                    ::height 60})
       o/fire-rules
       ((fn [session]
-         (is (= "green" (:ecolor (o/query session ::rule1))))
+         (is (= "green" (:ecolor (first (o/query-all session ::rule1)))))
          session))))
 
 (deftest join-followed-by-non-join

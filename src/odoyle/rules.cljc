@@ -599,10 +599,3 @@
       []
       (:matches rule))))
 
-(s/fdef query
-  :args (s/cat :session ::session
-               :rule-name qualified-keyword?))
-
-(defn query [session rule-name]
-  (last (query-all session rule-name)))
-
