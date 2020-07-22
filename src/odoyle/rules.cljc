@@ -72,6 +72,7 @@
                      alpha-node-path ;; the get-in vector to reach the parent AlphaNode from the root
                      condition ;; Condition associated with this node
                      id-key ;; the name of the id binding if we know it
+                     old-id-attrs ;; a set of id+attr so the node can keep track of which facts are "new"
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
@@ -172,7 +173,8 @@
                                   :child-id mem-node-id
                                   :alpha-node-path alpha-node-path
                                   :condition condition
-                                  :id-key nil})
+                                  :id-key nil
+                                  :old-id-attrs #{}})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -227,37 +229,42 @@
 
 (declare left-activate-memory-node)
 
-(defn- left-activate-join-node [session node-id id+attrs vars token]
-  (let [join-node (get-in session [:beta-nodes node-id])
-        alpha-node (get-in session (:alpha-node-path join-node))]
-    ;; SHORTCUT: if we know the id, only loop over alpha facts with that id
-    (if-let [id (some->> join-node :id-key (get vars))]
-      (reduce
-        (fn [session alpha-fact]
-          (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-            (left-activate-memory-node session (:child-id join-node) (conj id+attrs ((juxt :id :attr) alpha-fact)) new-vars (assoc token :fact alpha-fact) false)
-            session))
-        session
-        (vals (get-in alpha-node [:facts id])))
-      (reduce
-        (fn [session attr->fact]
-          (reduce
-            (fn [session alpha-fact]
-              (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-                (left-activate-memory-node session (:child-id join-node) (conj id+attrs ((juxt :id :attr) alpha-fact)) new-vars (assoc token :fact alpha-fact) false)
-                session))
-            session
-            (vals attr->fact)))
-        session
-        (vals (:facts alpha-node))))))
+(defn- left-activate-join-node
+  ([session node-id id+attrs vars token]
+   (let [join-node (get-in session [:beta-nodes node-id])
+         alpha-node (get-in session (:alpha-node-path join-node))]
+     ;; SHORTCUT: if we know the id, only loop over alpha facts with that id
+     (if-let [id (some->> join-node :id-key (get vars))]
+       (reduce
+         (fn [session alpha-fact]
+           (left-activate-join-node session join-node id+attrs vars token alpha-fact))
+         session
+         (vals (get-in alpha-node [:facts id])))
+       (reduce
+         (fn [session attr->fact]
+           (reduce
+             (fn [session alpha-fact]
+               (left-activate-join-node session join-node id+attrs vars token alpha-fact))
+             session
+             (vals attr->fact)))
+         session
+         (vals (:facts alpha-node))))))
+  ([session join-node id+attrs vars token alpha-fact]
+   (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
+     (let [id+attr ((juxt :id :attr) alpha-fact)
+           id+attrs (conj id+attrs id+attr)
+           new-token (assoc token :fact alpha-fact)
+           new? (not (contains? (:old-id-attrs join-node) id+attr))]
+       (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
+     session)))
 
-(defn- left-activate-memory-node [session node-id id+attrs vars token from-alpha?]
+(defn- left-activate-memory-node [session node-id id+attrs vars token new?]
   (let [node-path [:beta-nodes node-id]
         node (get-in session node-path)
-        ;; if this token came directly from the alpha network
+        ;; if this insert/update fact is new
         ;; and the condition doesn't have {:then false}
-        ;; set the trigger boolean so the :then block will run
-        session (if (and from-alpha?
+        ;; let the leaf node trigger
+        session (if (and new?
                          (#{:insert :update} (:kind token))
                          (-> node :condition :opts :then (not= false)))
                   (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
@@ -269,7 +276,9 @@
         enabled? (boolean
                    (or (not leaf-node?)
                        (nil? (:filter-fn node))
-                       ((:filter-fn node) vars)))]
+                       ((:filter-fn node) vars)))
+        ;; the id+attr of this token is the last one in the vector
+        id+attr (last id+attrs)]
     (as-> session $
           (case (:kind token)
             (:insert :update)
@@ -277,12 +286,17 @@
                 (update-in node-path assoc-in [:matches id+attrs]
                            (->Match vars enabled?))
                 (cond-> (and leaf-node? (:trigger node))
-                        (update :then-nodes conj node-id)))
+                        (update :then-nodes conj node-id))
+                (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
+                           conj id+attr))
             :retract
-            (update-in $ node-path update :matches
-                       (fn [matches]
-                         (assert (get matches id+attrs))
-                         (dissoc matches id+attrs))))
+            (-> $
+                (update-in node-path update :matches
+                           (fn [matches]
+                             (assert (get matches id+attrs))
+                             (dissoc matches id+attrs)))
+                (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
+                           disj id+attr)))
           (if-let [join-node-id (:child-id node)]
             (left-activate-join-node $ join-node-id id+attrs vars token)
             $))))

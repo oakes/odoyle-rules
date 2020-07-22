@@ -506,3 +506,43 @@
          (is (= 2 (count (o/query-all session ::rule1))))
          session))))
 
+(deftest only-last-condition-can-fire
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::rule1
+             [:what
+              [id ::left-of ::bob {:then false}]
+              [id ::color color {:then false}]
+              [::alice ::height height]
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::alice ::height 60) ;; out of order
+        (o/insert ::alice ::left-of ::bob)
+        (o/insert ::alice ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (= 1 @*count))
+           session))
+        (o/retract ::alice ::height)
+        (o/retract ::alice ::left-of)
+        (o/retract ::alice ::color)
+        (o/insert ::alice ::height 60)
+        (o/insert ::alice ::left-of ::bob)
+        (o/insert ::alice ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 @*count))
+           session))
+        (o/insert ::alice ::left-of ::bob)
+        (o/insert ::alice ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 @*count))
+           session))
+        (o/insert ::alice ::height 60)
+        o/fire-rules
+        ((fn [session]
+           (is (= 3 @*count))
+           session)))))
+
