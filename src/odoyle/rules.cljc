@@ -122,7 +122,7 @@
                   set
                   vec)]
     {:rule-name rule-name
-     :fn-name (symbol (str (namespace rule-name) "-" (name rule-name)))
+     :fn-name (symbol (str (namespace rule-name) "." (name rule-name)))
      :conditions conditions
      :arg {:keys syms}
      :when-body when-body
