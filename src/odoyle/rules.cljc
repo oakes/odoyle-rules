@@ -34,7 +34,11 @@
    (check-insert-spec attr value))
   ([attr value]
    (when-let [spec (s/get-spec attr)]
-     (parse spec value))))
+     (try
+       (parse spec value)
+       (catch Exception e
+         (println "Error when checking attribute" attr \newline)
+         (throw e))))))
 
 ;; private
 
