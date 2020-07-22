@@ -227,6 +227,8 @@
     vars
     (:bindings condition)))
 
+(def ^:private get-id-attr (juxt :id :attr))
+
 (declare left-activate-memory-node)
 
 (defn- left-activate-join-node
@@ -251,7 +253,7 @@
          (vals (:facts alpha-node))))))
   ([session join-node id+attrs vars token alpha-fact]
    (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
-     (let [id+attr ((juxt :id :attr) alpha-fact)
+     (let [id+attr (get-id-attr alpha-fact)
            id+attrs (conj id+attrs id+attr)
            new-token (assoc token :fact alpha-fact)
            new? (not (contains? (:old-id-attrs join-node) id+attr))]
@@ -320,8 +322,8 @@
         session))))
 
 (defn- right-activate-alpha-node [session node-path token]
-  (let [{:keys [id attr] :as fact} (:fact token)
-        id+attr [id attr]]
+  (let [fact (:fact token)
+        [id attr :as id+attr] (get-id-attr fact)]
     (as-> session $
           (case (:kind token)
             :insert
