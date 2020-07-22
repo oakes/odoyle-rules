@@ -416,43 +416,51 @@
 
 ;; public
 
-(def ^:dynamic *session* nil)
+(def ^{:dynamic true
+       :doc "Provides the current value of the session from inside a :then block.
+  Normally used to allow querying the session from inside a rule."}
+  *session* nil)
 
 (s/fdef fire-rules
   :args (s/cat :session ::session))
 
-(defn fire-rules [{:keys [then-nodes] :as session}]
-  (if (and (seq then-nodes)
-           ;; don't trigger :then blocks while inside a rule
-           (nil? *session*))
-    (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
-          session (reduce
-                    (fn [session node-id]
-                      (let [node-path [:beta-nodes node-id]
-                            node (get-in session node-path)
-                            {:keys [matches rule-name]} node
-                            rule-fn (or (get-in session [:rule-fns rule-name])
-                                        (throw (ex-info (str rule-name " not found") {})))]
-                        (doseq [{:keys [vars enabled]} (vals matches)
-                                :when enabled]
-                          (vswap! *trigger-queue conj [rule-fn vars]))
-                        (update-in session node-path assoc :trigger false)))
-                    session
-                    then-nodes)
-          session (assoc session :then-nodes #{})]
-      (->> @*trigger-queue
-           (reduce
-             (fn [session [rule-fn args]]
-               (binding [*session* session
-                         *mutable-session* (volatile! session)]
-                 (rule-fn args)
-                 @*mutable-session*))
-             session)
-           ;; recur because there may be new :then blocks to execute
-           fire-rules))
-    session))
+(defn fire-rules
+  "Fires :then blocks for any rules with a complete set of matches."
+  [session]
+  (let [then-nodes (:then-nodes session)]
+    (if (and (seq then-nodes)
+             ;; don't trigger :then blocks while inside a rule
+             (nil? *session*))
+      (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
+            session (reduce
+                      (fn [session node-id]
+                        (let [node-path [:beta-nodes node-id]
+                              node (get-in session node-path)
+                              {:keys [matches rule-name]} node
+                              rule-fn (or (get-in session [:rule-fns rule-name])
+                                          (throw (ex-info (str rule-name " not found") {})))]
+                          (doseq [{:keys [vars enabled]} (vals matches)
+                                  :when enabled]
+                            (vswap! *trigger-queue conj [rule-fn vars]))
+                          (update-in session node-path assoc :trigger false)))
+                      session
+                      then-nodes)
+            session (assoc session :then-nodes #{})]
+        (->> @*trigger-queue
+             (reduce
+               (fn [session [rule-fn args]]
+                 (binding [*session* session
+                           *mutable-session* (volatile! session)]
+                   (rule-fn args)
+                   @*mutable-session*))
+               session)
+             ;; recur because there may be new :then blocks to execute
+             fire-rules))
+      session)))
 
-(defn add-rule [session rule]
+(defn add-rule
+  "Adds a rule to the given session."
+  [session rule]
   (when (get-in session [:rule-fns (:name rule)])
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
@@ -490,7 +498,9 @@
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
-(defmacro ruleset [rules]
+(defmacro ruleset
+  "Returns a vector of rules after transforming the given map."
+  [rules]
   (reduce
     (fn [v {:keys [rule-name fn-name conditions then-body when-body arg]}]
       (conj v `(->Rule ~rule-name
@@ -501,7 +511,9 @@
     []
     (mapv ->rule (parse ::rules rules))))
 
-(defn ->session []
+(defn ->session
+  "Returns an empty session."
+  []
   (map->Session
     {:alpha-node (map->AlphaNode {:path nil
                                   :test-field nil
@@ -540,6 +552,7 @@
   :args (s/and ::insert-args insert-conformer))
 
 (defn insert
+  "Inserts a fact into the session. Can optionally insert multiple facts with the same id."
   ([session id attr->value]
    (reduce-kv (fn [session attr value]
                 (insert session id attr value))
@@ -560,6 +573,7 @@
   :args (s/and ::insert!-args insert-conformer))
 
 (defn insert!
+  "Same as `insert` but can be used inside of a :then block."
   ([id attr->value]
    (run! (fn [[attr value]]
            (insert! id attr value))
@@ -574,7 +588,9 @@
                :id ::id
                :attr qualified-keyword?))
 
-(defn retract [session id attr]
+(defn retract
+  "Retracts the fact with the given id + attr combo."
+  [session id attr]
   (let [id+attr [id attr]
         node-paths (get-in session [:id-attr-nodes id+attr])]
     (when-not node-paths
@@ -591,7 +607,9 @@
   :args (s/cat :id ::id
                :attr qualified-keyword?))
 
-(defn retract! [id attr]
+(defn retract!
+  "Same as `retract` but can be used inside of a :then block."
+  [id attr]
   (if *mutable-session*
     (vswap! *mutable-session* retract id attr)
     (throw (ex-info "This function must be called in a :then block" {}))))
@@ -600,7 +618,9 @@
   :args (s/cat :session ::session
                :rule-name qualified-keyword?))
 
-(defn query-all [session rule-name]
+(defn query-all
+  "Returns a vector of maps containing all the matches for the given rule."
+  [session rule-name]
   (let [rule-id (or (get-in session [:rule-ids rule-name])
                     (throw (ex-info (str rule-name " not in session") {})))
         rule (get-in session [:beta-nodes rule-id])]
