@@ -7,7 +7,7 @@
 
 ;; example 1
 
-(def rules
+(def rules-1
   (o/ruleset
     {::print-time
      [:what
@@ -16,7 +16,7 @@
       (println tt)]}))
 
 (def *session
-  (atom (reduce o/add-rule (o/->session) rules)))
+  (atom (reduce o/add-rule (o/->session) rules-1)))
 
 (swap! *session
   (fn [session]
@@ -26,7 +26,7 @@
 
 ;; example 2
 
-(def rules
+(def rules-2
   (o/ruleset
     {::move-player
      [:what
@@ -36,14 +36,14 @@
 
 (swap! *session
   (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
+    (-> (reduce o/add-rule (o/->session) rules-2)
         (o/insert ::player ::x 20)
         (o/insert ::player ::y 15)
         o/fire-rules)))
 
 ;; example 3
 
-(def rules
+(def rules-3
   (o/ruleset
     {::get-player
      [:what
@@ -57,7 +57,7 @@
 
 (swap! *session
   (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
+    (-> (reduce o/add-rule (o/->session) rules-3)
         (o/insert ::player {::x 20 ::y 15})
         (o/insert ::time ::total 100)
         o/fire-rules)))
@@ -66,7 +66,7 @@
 
 ;; example 4
 
-(def rules
+(def rules-4
   (o/ruleset
     {::get-player
      [:what
@@ -81,7 +81,7 @@
 
 (swap! *session
   (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
+    (-> (reduce o/add-rule (o/->session) rules-4)
         (o/insert ::player {::x 20 ::y 15})
         (o/insert ::time {::total 100 ::delta 0.1})
         o/fire-rules)))
@@ -97,7 +97,7 @@
                (o/insert ::window {::width width ::height height})
                o/fire-rules))))
 
-(def rules
+(def rules-5
   (o/ruleset
     {::get-player
      [:what
@@ -114,7 +114,7 @@
 
 (swap! *session
   (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
+    (-> (reduce o/add-rule (o/->session) rules-5)
         (o/insert ::player {::x 2000 ::y 15})
         o/fire-rules)))
 
@@ -124,7 +124,7 @@
 
 ;; example 6
 
-(def rules
+(def rules-6
   (o/ruleset
     {::get-character
      [:what
@@ -133,7 +133,7 @@
 
 (swap! *session
   (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
+    (-> (reduce o/add-rule (o/->session) rules-6)
         (o/insert ::player {::x 20 ::y 15})
         (o/insert ::enemy {::x 5 ::y 5})
         o/fire-rules)))
@@ -142,7 +142,7 @@
 
 ;; example 7
 
-(reset! *session (reduce o/add-rule (o/->session) rules))
+(reset! *session (reduce o/add-rule (o/->session) rules-6))
 
 (swap! *session
   (fn [session]
@@ -161,7 +161,7 @@
 (s/def ::width (s/and number? pos?))
 (s/def ::height (s/and number? pos?))
 
-(reset! *session (reduce o/add-rule (o/->session) rules))
+(reset! *session (reduce o/add-rule (o/->session) rules-6))
 
 (swap! *session
   (fn [session]
