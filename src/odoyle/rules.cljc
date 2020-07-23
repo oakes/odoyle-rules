@@ -36,7 +36,7 @@
    (when-let [spec (s/get-spec attr)]
      (try
        (parse spec value)
-       (catch Exception e
+       (catch #?(:clj Exception :cljs js/Error) e
          (println "Error when checking attribute" attr \newline)
          (throw e))))))
 
