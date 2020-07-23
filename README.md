@@ -6,6 +6,7 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
 
 * [API docs](https://oakes.github.io/odoyle-rules/)
 * The [dungeon crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler) game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
+* The screencast: https://www.youtube.com/watch?v=6_mDiH5_hSc
 * The tutorial below
 
 ## Comparison to Clara
