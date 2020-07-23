@@ -37,7 +37,7 @@
      (try
        (parse spec value)
        (catch #?(:clj Exception :cljs js/Error) e
-         (println "Error when checking attribute" attr \newline)
+         #?(:clj (.println *err* (str "Error when checking attribute " attr \newline)))
          (throw e))))))
 
 ;; private
