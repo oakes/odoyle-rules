@@ -166,5 +166,5 @@
 (swap! *session
   (fn [session]
     (-> session
-        (o/insert ::player {::x 20 ::y 15 ::width 0 ::height 15})
+        (o/insert ::player {::x 20 ::y 15 ::width 10 ::height 15})
         o/fire-rules)))
