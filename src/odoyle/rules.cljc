@@ -34,11 +34,10 @@
    (check-insert-spec attr value))
   ([attr value]
    (when-let [spec (s/get-spec attr)]
-     (try
-       (parse spec value)
-       (catch #?(:clj Exception :cljs js/Error) e
-         #?(:clj (.println *err* (str "Error when checking attribute " attr \newline)))
-         (throw e))))))
+     (when (= ::s/invalid (s/conform spec value))
+       (throw (ex-info (str "Error when checking attribute " attr "\n\n"
+                            (expound/expound-str spec value))
+                       {}))))))
 
 ;; private
 
