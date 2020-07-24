@@ -1,5 +1,5 @@
 (ns examples.odoyle
-  (:require [odoyle.rules :as o]
+  (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as st]))
 
@@ -163,8 +163,11 @@
 
 (reset! *session (reduce o/add-rule (o/->session) rules-6))
 
-(swap! *session
-  (fn [session]
-    (-> session
-        (o/insert ::player {::x 20 ::y 15 ::width 10 ::height 15})
-        o/fire-rules)))
+(->
+  (swap! *session
+    (fn [session]
+      (-> session
+          (o/insert ::player {::x 20 ::y 15 ::width 0 ::height 15})
+          o/fire-rules)))
+  ;; print spec error but don't stop execution
+  #?(:clj (try (catch Exception e (println (.getMessage e))))))
