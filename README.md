@@ -18,7 +18,7 @@ Advantages compared to Clara:
 * O'Doyle stores data in id-attribute-value tuples like `[::player ::health 10]` whereas Clara (by default) uses Clojure records. I think storing each key-value pair as a separate fact leads to a much more flexible system.
 * O'Doyle has built-in support for updating facts. You don't even need to explicitly do it; simply inserting a fact with an existing id + attribute combo will cause the old fact to be removed. This is only possible because of the aforementioned use of tuples.
 * O'Doyle provides a simple `ruleset` macro that defines your rules from a map of plain data. Clara's `defrule` macro creates a global var that is implicitly added to a session. I tried to solve that particular problem with my [clarax](https://github.com/oakes/clarax) library but with O'Doyle it's even cleaner.
-* O'Doyle makes no distinction between rules and queries — all rules are also queries. Clara has a separate `defquery` macro for making queries, which means potential duplication since queries can often be the same as the "left hand side" of a rule.
+* O'Doyle makes no distinction between rules and queries -- all rules are also queries. Clara has a separate `defquery` macro for making queries, which means potential duplication since queries can often be the same as the "left hand side" of a rule.
 * O'Doyle has nice spec integration (see below).
 
 Disadvantages compared to Clara:
@@ -95,7 +95,7 @@ Updating the player's `::x` attribute isn't useful unless we can get the value e
       [::player ::y y]]}))
 ``` 
 
-As you can see, rules don't need a `:then` block if you're only using them to query from the outside. In this case, we'll query it externally we'll get back a vector of maps whose fields have the names you created as bindings:
+As you can see, rules don't need a `:then` block if you're only using them to query from the outside. In this case, we'll query it externally and get back a vector of maps whose fields have the names you created as bindings:
 
 ```clj
 (swap! *session
@@ -163,6 +163,8 @@ Imagine you want to move the player's position based on its current position. So
 
 The `{:then false}` option tells O'Doyle to not run the `:then` block if that tuple is updated. If you don't include it, you'll get a StackOverflowException because the rule will cause itself to fire in an infinite loop. If all tuples in the `:what` block have `{:then false}`, it will never fire.
 
+Another way to avoid infinite loops is to not include the data you're modifying in your `:what` block at all. Instead, you could retrieve it by querying from your `:then` block with `(o/query-all o/*session* ::get-player)` and pulling out the data you want.
+
 ## Conditions
 
 Rules have nice a way of breaking apart your logic into independent units. If we want to prevent the player from moving off the right side of the screen, we could add a condition inside of the `:then` block of `::move-player`, but it's good to get in the habit of making separate rules.
@@ -219,7 +221,7 @@ You can add as many conditions as you want, and they will implicitly work as if 
  (o/insert! ::player ::x window-width)]
 ```
 
-Using a `:when` block is better because it also affects the results of `query-all` — matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
+Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
 
 ## Joins and advanced queries
 
