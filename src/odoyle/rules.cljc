@@ -300,10 +300,7 @@
                            conj id+attr))
             :retract
             (-> $
-                (update-in node-path update :matches
-                           (fn [matches]
-                             (assert (get matches id+attrs))
-                             (dissoc matches id+attrs)))
+                (update-in node-path update :matches dissoc id+attrs)
                 (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
                            disj id+attr)))
           (if-let [join-node-id (:child-id node)]
