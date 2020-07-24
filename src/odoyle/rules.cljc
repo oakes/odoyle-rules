@@ -6,9 +6,11 @@
 ;; parsing
 
 (s/def ::id #(or (qualified-keyword? %) (integer? %)))
+(s/def ::attr qualified-keyword?)
+(s/def ::value some?)
 (s/def ::what-id (s/or :binding simple-symbol? :value ::id))
-(s/def ::what-attr (s/or :value qualified-keyword?))
-(s/def ::what-value (s/or :binding simple-symbol? :value any?))
+(s/def ::what-attr (s/or :value ::attr))
+(s/def ::what-value (s/or :binding simple-symbol? :value ::value))
 (s/def ::then boolean?)
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
@@ -28,16 +30,6 @@
     (if (= ::s/invalid res)
       (throw (ex-info (expound/expound-str spec content) {}))
       res)))
-
-(defn- check-insert-spec
-  ([[attr value]]
-   (check-insert-spec attr value))
-  ([attr value]
-   (when-let [spec (s/get-spec attr)]
-     (when (= ::s/invalid (s/conform spec value))
-       (throw (ex-info (str "Error when checking attribute " attr "\n\n"
-                            (expound/expound-str spec value))
-                       {}))))))
 
 ;; private
 
@@ -530,11 +522,21 @@
   (s/or
     :batch (s/cat :session ::session
                   :id ::id
-                  :attr->value (s/map-of qualified-keyword? any?))
+                  :attr->value (s/map-of ::attr ::value))
     :single (s/cat :session ::session
                    :id ::id
-                   :attr qualified-keyword?
-                   :value any?)))
+                   :attr ::attr
+                   :value ::value)))
+
+(defn- check-insert-spec
+  ([[attr value]]
+   (check-insert-spec attr value))
+  ([attr value]
+   (when-let [spec (s/get-spec attr)]
+     (when (= ::s/invalid (s/conform spec value))
+       (throw (ex-info (str "Error when checking attribute " attr "\n\n"
+                            (expound/expound-str spec value))
+                       {}))))))
 
 (def ^:private insert-conformer
   (s/conformer
@@ -560,10 +562,10 @@
 (s/def ::insert!-args
   (s/or
     :batch (s/cat :id ::id
-                  :attr->value (s/map-of qualified-keyword? any?))
+                  :attr->value (s/map-of ::attr ::value))
     :single (s/cat :id ::id
-                   :attr qualified-keyword?
-                   :value any?)))
+                   :attr ::attr
+                   :value ::value)))
 
 (s/fdef insert!
   :args (s/and ::insert!-args insert-conformer))
@@ -582,7 +584,7 @@
 (s/fdef retract
   :args (s/cat :session ::session
                :id ::id
-               :attr qualified-keyword?))
+               :attr ::attr))
 
 (defn retract
   "Retracts the fact with the given id + attr combo."
@@ -601,7 +603,7 @@
 
 (s/fdef retract!
   :args (s/cat :id ::id
-               :attr qualified-keyword?))
+               :attr ::attr))
 
 (defn retract!
   "Same as `retract` but can be used inside of a :then block."
