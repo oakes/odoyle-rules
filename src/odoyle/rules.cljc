@@ -7,7 +7,7 @@
 
 (s/def ::id #(or (qualified-keyword? %) (integer? %)))
 (s/def ::attr qualified-keyword?)
-(s/def ::value some?)
+(s/def ::value any?)
 (s/def ::what-id (s/or :binding simple-symbol? :value ::id))
 (s/def ::what-attr (s/or :value ::attr))
 (s/def ::what-value (s/or :binding simple-symbol? :value ::value))
