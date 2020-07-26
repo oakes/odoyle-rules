@@ -69,6 +69,7 @@
                      condition ;; Condition associated with this node
                      id-key ;; the name of the id binding if we know it
                      old-id-attrs ;; a set of id+attr so the node can keep track of which facts are "new"
+                     disable-fast-updates ;; boolean indicating it isn't safe to do fast updates
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
@@ -173,7 +174,8 @@
                                   :alpha-node-path alpha-node-path
                                   :condition condition
                                   :id-key nil
-                                  :old-id-attrs #{}})
+                                  :old-id-attrs #{}
+                                  :disable-fast-updates false})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -345,7 +347,12 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (right-activate-join-node session child-id id+attr token))
+              (if (and (= :update (:kind token))
+                       (get-in session [:beta-nodes child-id :disable-fast-updates]))
+                (-> session
+                    (right-activate-join-node child-id id+attr (->Token (:old-fact token) :retract nil))
+                    (right-activate-join-node child-id id+attr (->Token (:fact token) :insert nil)))
+                (right-activate-join-node session child-id id+attr token)))
             $
             (:successors (get-in session node-path))))))
 
@@ -467,7 +474,9 @@
                                               :leaf-node-id leaf-node-id))))
                         session
                         (:mem-node-ids session))
-        ;; update all join nodes with the name of the id binding, if it exists
+        ;; update all join nodes with:
+        ;; 1. the name of the id binding, if it exists
+        ;; 2. whether to disable fast updates
         session (reduce (fn [session join-node-id]
                           (update-in session [:beta-nodes join-node-id]
                                      (fn [join-node]
@@ -476,7 +485,13 @@
                                                               (when (and (= :id field)
                                                                          (contains? (:joins bindings) key))
                                                                 key))
-                                                            (-> join-node :condition :bindings))))))
+                                                            (-> join-node :condition :bindings))
+                                              ;; disable fast updates for facts whose value is part of a join
+                                              :disable-fast-updates (contains? (:joins bindings)
+                                                                               (some (fn [{:keys [field key]}]
+                                                                                       (when (= :value field)
+                                                                                         key))
+                                                                                     (-> join-node :condition :bindings)))))))
                         session
                         (:join-node-ids session))]
     (-> session
