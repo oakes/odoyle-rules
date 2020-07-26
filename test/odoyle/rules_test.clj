@@ -452,9 +452,10 @@
             [id ::height height]]}))
       (o/insert ::alice ::color "blue")
       (o/insert ::alice ::height 60)
+      (o/insert ::bob ::left-of ::alice)
       (o/insert ::charlie ::color "green")
       (o/insert ::charlie ::height 72)
-      (o/insert ::bob ::left-of ::alice)
+      (o/insert ::bob ::left-of ::charlie)
       o/fire-rules
       ((fn [session]
          (is (= 1 (count (o/query-all session ::rule1))))
