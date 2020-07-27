@@ -5,9 +5,10 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
 ## Documentation
 
 * [API docs](https://oakes.github.io/odoyle-rules/)
-* The [dungeon crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler) game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
-* The screencast: https://www.youtube.com/watch?v=6_mDiH5_hSc
-* The tutorial below
+* See real uses of O'Doyle:
+  * [Dungeon Crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler), a game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
+  * [Paravim](https://github.com/oakes/Paravim), a text editor (see [this file](https://github.com/oakes/Paravim/blob/master/src/paravim/session.cljc))
+* Read the tutorial below
 
 ## Comparison to Clara
 
