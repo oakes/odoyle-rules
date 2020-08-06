@@ -1,4 +1,3 @@
-^{:open-url "http://localhost:9500"}
 {:main          examples.odoyle
  :optimizations :none
  :output-to     "dev-resources/public/main.js"
