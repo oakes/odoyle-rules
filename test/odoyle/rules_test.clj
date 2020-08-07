@@ -546,3 +546,27 @@
            (is (= 3 @*count))
            session)))))
 
+
+(deftest avoid-unnecessary-rule-firings
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::get-person
+             [:what
+              [id ::color color]
+              [id ::left-of left-of]
+              [id ::height height]
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::bob ::color "blue")
+        (o/insert ::bob ::left-of ::zach)
+        (o/insert ::bob ::height 72)
+        (o/insert ::alice ::color "blue")
+        (o/insert ::alice ::left-of ::zach)
+        (o/insert ::alice ::height 72)
+        o/fire-rules
+        (o/insert ::alice ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (= 3 @*count))
+           session)))))

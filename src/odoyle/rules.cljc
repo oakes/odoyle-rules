@@ -86,7 +86,7 @@
                     rule-fns ;; fns
                     rule-ids ;; map of rule name -> the id of the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
-                    then-nodes ;; set of MemoryNode ids that need executed
+                    then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -289,7 +289,7 @@
                 (update-in node-path assoc-in [:matches id+attrs]
                            (->Match vars enabled?))
                 (cond-> (and leaf-node? (:trigger node))
-                        (update :then-nodes conj node-id))
+                        (update :then-queue conj [node-id id+attrs]))
                 (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
                            conj id+attr))
             :retract
@@ -422,25 +422,25 @@
 (defn fire-rules
   "Fires :then blocks for any rules with a complete set of matches."
   [session]
-  (let [then-nodes (:then-nodes session)]
-    (if (and (seq then-nodes)
+  (let [then-queue (:then-queue session)]
+    (if (and (seq then-queue)
              ;; don't trigger :then blocks while inside a rule
              (nil? *session*))
       (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
             session (reduce
-                      (fn [session node-id]
+                      (fn [session [node-id id+attrs]]
                         (let [node-path [:beta-nodes node-id]
                               node (get-in session node-path)
                               {:keys [matches rule-name]} node
                               rule-fn (or (get-in session [:rule-fns rule-name])
                                           (throw (ex-info (str rule-name " not found") {})))]
-                          (doseq [{:keys [vars enabled]} (vals matches)
-                                  :when enabled]
-                            (vswap! *trigger-queue conj [rule-fn vars]))
+                          (when-let [{:keys [vars enabled]} (get matches id+attrs)]
+                            (when enabled
+                              (vswap! *trigger-queue conj [rule-fn vars])))
                           (update-in session node-path assoc :trigger false)))
                       session
-                      then-nodes)
-            session (assoc session :then-nodes #{})]
+                      then-queue)
+            session (assoc session :then-queue #{})]
         (->> @*trigger-queue
              (reduce
                (fn [session [rule-fn args]]
@@ -529,7 +529,7 @@
      :rule-fns {}
      :rule-ids {}
      :id-attr-nodes {}
-     :then-nodes #{}}))
+     :then-queue #{}}))
 
 (s/def ::session #(instance? Session %))
 
