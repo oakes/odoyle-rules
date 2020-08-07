@@ -34,12 +34,11 @@
       :then
       (o/insert! ::player ::x tt)]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules-2)
-        (o/insert ::player ::x 20)
-        (o/insert ::player ::y 15)
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-2)
+      (o/insert ::player ::x 20)
+      (o/insert ::player ::y 15)
+      o/fire-rules))
 
 ;; example 3
 
@@ -55,12 +54,11 @@
       :then
       (println "Query from inside rule:" (o/query-all o/*session* ::get-player))]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules-3)
-        (o/insert ::player {::x 20 ::y 15})
-        (o/insert ::time ::total 100)
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-3)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::time ::total 100)
+      o/fire-rules))
 
 (println (o/query-all @*session ::get-player))
 
@@ -79,12 +77,11 @@
       :then
       (o/insert! ::player ::x (+ x dt))]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules-4)
-        (o/insert ::player {::x 20 ::y 15})
-        (o/insert ::time {::total 100 ::delta 0.1})
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-4)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::time {::total 100 ::delta 0.1})
+      o/fire-rules))
 
 (println (o/query-all @*session ::get-player))
 
@@ -112,11 +109,10 @@
       :then
       (o/insert! ::player ::x window-width)]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules-5)
-        (o/insert ::player {::x 2000 ::y 15})
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-5)
+      (o/insert ::player {::x 2000 ::y 15})
+      o/fire-rules))
 
 (on-window-resize 800 600)
 
@@ -131,12 +127,11 @@
       [id ::x x]
       [id ::y y]]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules-6)
-        (o/insert ::player {::x 20 ::y 15})
-        (o/insert ::enemy {::x 5 ::y 5})
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-6)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::enemy {::x 5 ::y 5})
+      o/fire-rules))
 
 (println (o/query-all @*session ::get-character))
 

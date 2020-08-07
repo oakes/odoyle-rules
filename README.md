@@ -125,12 +125,11 @@ You can also query from inside a rule with the special `*session*` dynamic var:
       :then
       (println "Query from inside rule:" (o/query-all o/*session* ::get-player))]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
-        (o/insert ::player {::x 20 ::y 15}) ;; notice this short-hand way of inserting multiple things with the same id
-        (o/insert ::time ::total 100)
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules)
+      (o/insert ::player {::x 20 ::y 15}) ;; notice this short-hand way of inserting multiple things with the same id
+      (o/insert ::time ::total 100)
+      o/fire-rules))
 ```
 
 ## Avoiding infinite loops
@@ -151,12 +150,11 @@ Imagine you want to move the player's position based on its current position. So
       :then
       (o/insert! ::player ::x (+ x dt))]}))
 
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
-        (o/insert ::player {::x 20 ::y 15})
-        (o/insert ::time {::total 100 ::delta 0.1})
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::time {::total 100 ::delta 0.1})
+      o/fire-rules))
 
 (println (o/query-all @*session ::get-player))
 ;; => [{:x 20.1, :y 15}]
@@ -240,12 +238,11 @@ Now, we're making a binding on the id column, and since we're using the same bin
 Now we can add multiple things with those two attributes and get them back in a single query:
 
 ```clj
-(swap! *session
-  (fn [session]
-    (-> (reduce o/add-rule (o/->session) rules)
-        (o/insert ::player {::x 20 ::y 15})
-        (o/insert ::enemy {::x 5 ::y 5})
-        o/fire-rules)))
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::enemy {::x 5 ::y 5})
+      o/fire-rules))
 
 (println (o/query-all @*session ::get-character))
 ;; => [{:id :examples.odoyle/player, :x 20, :y 15} {:id :examples.odoyle/enemy, :x 5, :y 5}]
