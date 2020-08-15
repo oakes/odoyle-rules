@@ -1,5 +1,9 @@
 [![Clojars Project](https://img.shields.io/clojars/v/net.sekao/odoyle-rules.svg)](https://clojars.org/net.sekao/odoyle-rules)
 
+<p align="center">
+  <a href="https://www.youtube.com/watch?v=sz_LTHhIGsc"><img src="odoylerules.jpg" width="175" ></a>
+</p>
+
 O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules engine for Clojure and ClojureScript. Stop being one of those jabronis that don't rule things. When I was a kid in Virginia our teacher tried to teach us the names of cities in our state by letting us be the "rulers" of them. My buddy Roger said he ruled Richmond. I said I ruled Chicago because I was a Bulls fan and didn't understand geography. I don't recall why I'm telling you this.
 
 ## Documentation
