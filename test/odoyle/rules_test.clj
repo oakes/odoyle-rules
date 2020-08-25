@@ -313,7 +313,7 @@
             [b ::color "blue"]
             [::alice ::color c {:then false}]
             :then
-            (o/insert! ::alice ::color "maize")]}))
+            (o/reset! (o/insert o/*session* ::alice ::color "maize"))]}))
       (o/insert ::bob ::color "blue")
       (o/insert ::alice ::color "red")
       o/fire-rules
@@ -329,8 +329,10 @@
              [:what
               [b ::color "blue"]
               :then
-              (o/insert! ::alice ::color "maize")
-              (o/insert! ::charlie ::color "gold")]
+              (-> o/*session*
+                  (o/insert ::alice ::color "maize")
+                  (o/insert ::charlie ::color "gold")
+                  o/reset!)]
              ::rule2
              [:what
               [::alice ::color c1]
@@ -353,12 +355,12 @@
            [:what
             [b ::color "blue"]
             :then
-            (o/insert! ::charlie ::right-of ::bob)]
+            (o/reset! (o/insert o/*session* ::charlie ::right-of ::bob))]
            ::rule2
            [:what
             [c ::right-of b]
             :then
-            (o/insert! b ::left-of c)]
+            (o/reset! (o/insert o/*session* b ::left-of c))]
            ::rule3
            [:what
             [b ::left-of c]]}))
@@ -475,8 +477,10 @@
             :when
             (not= kind :player)
             :then
-            (o/insert! eid ::color "green")
-            (o/insert! eid ::height 70)]}))
+            (-> o/*session*
+                (o/insert eid ::color "green")
+                (o/insert eid ::height 70)
+                o/reset!)]}))
       (o/insert 1 {::kind :player
                    ::color "red"
                    ::height 72})

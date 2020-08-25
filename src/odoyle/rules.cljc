@@ -1,6 +1,7 @@
 (ns odoyle.rules
   (:require [clojure.spec.alpha :as s]
-            [odoyle.rules-parse :as parse]))
+            [odoyle.rules-parse :as parse])
+  (:refer-clojure :exclude [reset!]))
 
 ;; parsing
 
@@ -538,7 +539,11 @@
   :args (s/and ::insert!-args insert-conformer))
 
 (defn insert!
-  "Same as `insert` but can be used inside of a :then block."
+  "Same as `insert` but can be used inside of a :then block.
+  
+  The function is DEPRECATED. It will never be removed, but prefer this instead:
+  
+  (o/reset! (o/insert o/*session* id attr))"
   ([id attr->value]
    (run! (fn [[attr value]]
            (insert! id attr value))
@@ -573,7 +578,11 @@
                :attr ::attr))
 
 (defn retract!
-  "Same as `retract` but can be used inside of a :then block."
+  "Same as `retract` but can be used inside of a :then block.
+  
+  The function is DEPRECATED. It will never be removed, but prefer this instead:
+  
+  (o/reset! (o/retract o/*session* id attr))"
   [id attr]
   (if *mutable-session*
     (vswap! *mutable-session* retract id attr)
@@ -596,4 +605,13 @@
           v))
       []
       (:matches rule))))
+
+(defn reset!
+  "Mutates the session from a :then block."
+  [new-session]
+  (if *mutable-session*
+    (if (= *session* @*mutable-session*)
+      (vreset! *mutable-session* new-session)
+      (throw (ex-info "You may only call `reset!` once in a :then block" {})))
+    (throw (ex-info "You may only call `reset!` in a :then block" {}))))
 
