@@ -54,7 +54,7 @@ Let's start by just making a rule that prints out a timestamp whenever it update
   (atom (reduce o/add-rule (o/->session) rules)))
 ```
 
-The most important part of a rule is the `:what` block, which specifies what tuples must exist for the rule to fire. The key is that you can create a *binding* in the id or value column by supplying a symbol, like `tt` above. When the rule fires, the `then` block is executed, which has access to the bindings you created.
+The most important part of a rule is the `:what` block, which specifies what tuples must exist for the rule to fire. The key is that you can create a *binding* in the id or value column by supplying a symbol, like `tt` above. When the rule fires, the `:then` block is executed, which has access to the bindings you created.
 
 You can then insert the time value:
 
@@ -84,7 +84,7 @@ Now imagine you want to make the player move to the right every time the frame i
           o/reset!)]}))
 ```
 
-The `*session*` dynamic var will have the current value of the session, and `reset! will update it so it has the newly-inserted value.
+The `*session*` dynamic var will have the current value of the session, and `reset!` will update it so it has the newly-inserted value.
 
 ## Queries
 
