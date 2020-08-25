@@ -1,6 +1,7 @@
 (ns odoyle.rules
   (:require [clojure.spec.alpha :as s]
-            [odoyle.rules-parse :as parse])
+            [expound.alpha :as expound]
+            [clojure.string :as str])
   (:refer-clojure :exclude [reset!]))
 
 ;; parsing
@@ -24,6 +25,12 @@
                 :then-block (s/? ::then-block)))
 
 (s/def ::rules (s/map-of qualified-keyword? ::rule))
+
+(defn parse [spec content]
+  (let [res (s/conform spec content)]
+    (if (= ::s/invalid res)
+      (throw (ex-info (expound/expound-str spec content) {}))
+      res)))
 
 ;; private
 
@@ -82,6 +89,44 @@
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     ])
+
+(defn- add-to-condition [condition field [kind value]]
+  (case kind
+    :binding (update condition :bindings conj (->Binding field value (keyword value)))
+    :value (update condition :nodes conj (map->AlphaNode {:path nil
+                                                          :test-field field
+                                                          :test-value value
+                                                          :children []
+                                                          :successors []
+                                                          :facts {}}))))
+
+(defn- ->condition [{:keys [id attr value opts]}]
+  (-> {:bindings [] :nodes [] :opts opts}
+      (add-to-condition :id id)
+      (add-to-condition :attr attr)
+      (add-to-condition :value value)))
+
+(defn ->rule [[rule-name rule]]
+  (let [{:keys [what-block when-block then-block]} rule
+        conditions (mapv ->condition (:body what-block))
+        when-body (:body when-block)
+        when-body (if (> (count when-body) 1)
+                    (cons 'and when-body)
+                    (first when-body))
+        then-body (:body then-block)
+        syms (->> conditions
+                  (mapcat :bindings)
+                  (map :sym)
+                  set
+                  vec)]
+    {:rule-name rule-name
+     :fn-name (-> (str (namespace rule-name) "-" (name rule-name))
+                  (str/replace "." "-")
+                  symbol)
+     :conditions conditions
+     :arg {:keys syms}
+     :when-body when-body
+     :then-body then-body}))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]
@@ -465,22 +510,15 @@
 (defmacro ruleset
   "Returns a vector of rules after transforming the given map."
   [rules]
-  (->> (parse/parse ::rules rules)
-       (mapv (fn [[rule-name rule]]
-               (parse/parse-rule rule-name rule)))
-       (reduce
-         (fn [v {:keys [rule-name fn-name conditions then-body when-body arg]}]
-           (conj v `(->Rule ~rule-name
-                            (mapv (fn [condition#]
-                                    (-> condition#
-                                        (update :bindings #(mapv map->Binding %))
-                                        (update :nodes #(mapv map->AlphaNode %))
-                                        map->Condition))
-                                  '~conditions)
-                            (fn ~fn-name [~arg] ~@then-body)
-                            ~(when (some? when-body)
-                               `(fn [~arg] ~when-body)))))
-         [])))
+  (reduce
+    (fn [v {:keys [rule-name fn-name conditions then-body when-body arg]}]
+      (conj v `(->Rule ~rule-name
+                       (mapv map->Condition '~conditions)
+                       (fn ~fn-name [~arg] ~@then-body)
+                       ~(when (some? when-body)
+                          `(fn [~arg] ~when-body)))))
+    []
+    (mapv ->rule (parse ::rules rules))))
 
 (defn ->session
   "Returns an empty session."
@@ -511,12 +549,22 @@
                    :attr ::attr
                    :value ::value)))
 
+(defn- check-insert-spec
+  ([[attr value]]
+   (check-insert-spec attr value))
+  ([attr value]
+   (when-let [spec (s/get-spec attr)]
+     (when (= ::s/invalid (s/conform spec value))
+       (throw (ex-info (str "Error when checking attribute " attr "\n\n"
+                            (expound/expound-str spec value))
+                       {}))))))
+
 (def ^:private insert-conformer
   (s/conformer
     (fn [[kind args :as parsed-args]]
       (case kind
-        :batch (some parse/check-insert-spec (:attr->value args))
-        :single (parse/check-insert-spec (:attr args) (:value args)))
+        :batch (some check-insert-spec (:attr->value args))
+        :single (check-insert-spec (:attr args) (:value args)))
       parsed-args)))
 
 (s/fdef insert
