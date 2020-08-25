@@ -372,6 +372,10 @@
   Normally used to allow querying the session from inside a rule."}
   *session* nil)
 
+(def ^{:dynamic true
+       :doc "Provides a map of all the matched values from inside a :then block."}
+  *match* nil)
+
 (s/fdef fire-rules
   :args (s/cat :session ::session))
 
@@ -399,10 +403,11 @@
             session (assoc session :then-queue #{})]
         (->> @*trigger-queue
              (reduce
-               (fn [session [rule-fn args]]
+               (fn [session [rule-fn match]]
                  (binding [*session* session
-                           *mutable-session* (volatile! session)]
-                   (rule-fn args)
+                           *mutable-session* (volatile! session)
+                           *match* match]
+                   (rule-fn match)
                    @*mutable-session*))
                session)
              ;; recur because there may be new :then blocks to execute
