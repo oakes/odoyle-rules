@@ -79,8 +79,12 @@ Now imagine you want to make the player move to the right every time the frame i
      [:what
       [::time ::total tt]
       :then
-      (o/insert! ::player ::x tt)]}))
+      (-> o/*session*
+          (o/insert ::player ::x tt)
+          o/reset!)]}))
 ```
+
+The `*session*` dynamic var will have the current value of the session, and `reset! will update it so it has the newly-inserted value.
 
 ## Queries
 
@@ -93,7 +97,9 @@ Updating the player's `::x` attribute isn't useful unless we can get the value e
      [:what
       [::time ::total tt]
       :then
-      (o/insert! ::player ::x tt)]
+      (-> o/*session*
+          (o/insert ::player ::x tt)
+          o/reset!)]
      ::get-player
      [:what
       [::player ::x x]
@@ -152,7 +158,9 @@ Imagine you want to move the player's position based on its current position. So
       [::time ::delta dt]
       [::player ::x x {:then false}] ;; don't run the :then block if only this is updated!
       :then
-      (o/insert! ::player ::x (+ x dt))]}))
+      (-> o/*session*
+          (o/insert ::player ::x (+ x dt))
+          o/reset!)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules)
@@ -192,7 +200,9 @@ Then we make the rule:
  [::window ::width window-width]
  :then
  (when (> x window-width)
-   (o/insert! ::player ::x window-width))]
+   (-> o/*session*
+       (o/insert ::player ::x window-width)
+       o/reset!))]
 ```
 
 Notice that we *don't* need `{:then false}` this time, because the condition is preventing the rule from re-firing.
@@ -207,7 +217,9 @@ While the above code works, you can also put your condition in a special `:when`
  :when
  (> x window-width)
  :then
- (o/insert! ::player ::x window-width)]
+ (-> o/*session*
+     (o/insert ::player ::x window-width)
+     o/reset!)]
 ```
 
 You can add as many conditions as you want, and they will implicitly work as if they were combined together with `and`:
@@ -221,7 +233,9 @@ You can add as many conditions as you want, and they will implicitly work as if 
  (> x window-width)
  (pos? window-width)
  :then
- (o/insert! ::player ::x window-width)]
+ (-> o/*session*
+     (o/insert ::player ::x window-width)
+     o/reset!)]
 ```
 
 Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
