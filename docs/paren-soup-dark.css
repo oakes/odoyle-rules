@@ -1,14 +1,9 @@
-html, body, .paren-soup {
-    background-color: #272b30;
-}
-
-button {
-	color: white;
-}
-
 .paren-soup {
+	font-size: 16px;
 	font-family: monospace;
 	color: lightgray;
+	background-color: #293134;
+	outline: 1px solid;
 }
 
 .paren-soup .error-text {
@@ -18,10 +13,7 @@ button {
 }
 
 .paren-soup .instarepl {
-	float: left;
 	position: relative;
-	display: list-item;
-	padding-right: 5px;
 	min-width: 200px;
 	max-width: 200px;
 }
@@ -35,6 +27,7 @@ button {
 	word-wrap: break-word;
 	right: 0px;
 	opacity: 0.7;
+	white-space: break-spaces;
 }
 
 .paren-soup .instarepl .result:hover {
@@ -53,16 +46,17 @@ button {
 	padding: 0px 5px;
 	text-align: right;
 	opacity: 0.7;
-    border-right: 1px solid #ddd;
 }
 
 .paren-soup .content {
 	margin: 0px;
+	margin-left: 200px;
 	padding: 0px 5px;
 	outline: 0px solid transparent;
 	white-space: pre;
 	word-wrap: normal;
 	overflow: scroll;
+	border-left: 1px solid #ddd;
 }
 
 .paren-soup .content .symbol {

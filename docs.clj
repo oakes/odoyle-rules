@@ -1,5 +1,7 @@
 (require
   '[dynadoc.core :as dynadoc])
 
-(dynadoc/-main "--port" "5000")
+(dynadoc/start {:port 5000
+                :exclusions '#{odoyle.rules/->rule
+                               odoyle.rules/parse}})
 
