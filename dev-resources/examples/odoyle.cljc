@@ -32,7 +32,9 @@
      [:what
       [::time ::total tt]
       :then
-      (o/insert! ::player ::x tt)]}))
+      (-> o/*session*
+          (o/insert ::player ::x tt)
+          o/reset!)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-2)
@@ -75,7 +77,9 @@
       [::time ::delta dt]
       [::player ::x x {:then false}]
       :then
-      (o/insert! ::player ::x (+ x dt))]}))
+      (-> o/*session*
+          (o/insert ::player ::x (+ x dt))
+          o/reset!)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-4)
@@ -107,7 +111,9 @@
       :when
       (> x window-width)
       :then
-      (o/insert! ::player ::x window-width)]}))
+      (-> o/*session*
+          (o/insert ::player ::x window-width)
+          o/reset!)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-5)
