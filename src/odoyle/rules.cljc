@@ -413,8 +413,7 @@
 ;; public
 
 (def ^{:dynamic true
-       :doc "Provides the current value of the session from inside a :then block.
-  Normally used to allow querying the session from inside a rule."}
+       :doc "Provides the current value of the session from inside a :then block."}
   *session* nil)
 
 (def ^{:dynamic true
