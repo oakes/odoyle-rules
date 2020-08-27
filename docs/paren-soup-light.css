@@ -1,9 +1,11 @@
+html, body, .paren-soup {
+    background-color: #f7f7f7;
+}
+
 .paren-soup {
-	font-size: 16px;
+	font-size: 18px;
 	font-family: monospace;
 	color: gray;
-	background-color: #f7f7f7;
-	outline: 1px solid;
 	caret-color: black;
 }
 
@@ -14,7 +16,10 @@
 }
 
 .paren-soup .instarepl {
+	float: left;
 	position: relative;
+	display: list-item;
+	padding-right: 5px;
 	min-width: 200px;
 	max-width: 200px;
 }
@@ -47,17 +52,16 @@
 	padding: 0px 5px;
 	text-align: right;
 	opacity: 0.7;
+    border-right: 1px solid #ddd;
 }
 
 .paren-soup .content {
 	margin: 0px;
-	margin-left: 200px;
 	padding: 0px 5px;
 	outline: 0px solid transparent;
 	white-space: pre;
 	word-wrap: normal;
 	overflow: scroll;
-	border-left: 1px solid #ddd;
 	background-color: white;
 }
 
