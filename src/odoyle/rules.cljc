@@ -595,7 +595,7 @@
   
   The function is DEPRECATED. It will never be removed, but prefer this instead:
   
-  (o/reset! (o/insert o/*session* id attr))"
+  (o/reset! (o/insert o/*session* id attr value))"
   ([id attr->value]
    (run! (fn [[attr value]]
            (insert! id attr value))
