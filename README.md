@@ -12,6 +12,7 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
 * See real uses of O'Doyle:
   * [Dungeon Crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler), a game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
   * [Paravim](https://github.com/oakes/Paravim), a text editor (see [this file](https://github.com/oakes/Paravim/blob/master/src/paravim/session.cljc))
+  * [O'Doyle Rum](https://github.com/oakes/odoyle-rum), a library for making web UIs with O'Doyle
 * Read the tutorial below
 
 ## Comparison to Clara
