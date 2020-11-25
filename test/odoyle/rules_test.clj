@@ -262,6 +262,32 @@
          (is (= 3 (count (o/query-all session ::get-person))))
          session))))
 
+(deftest query-all-facts
+  (let [rules (o/ruleset
+                {::get-person
+                 [:what
+                  [id ::color color]
+                  [id ::left-of left-of]
+                  [id ::height height]]})]
+    (-> (reduce o/add-rule (o/->session) rules)
+        (o/insert ::bob ::color "blue")
+        (o/insert ::bob ::left-of ::zach)
+        (o/insert ::bob ::height 72)
+        (o/insert ::alice ::color "green")
+        (o/insert ::alice ::left-of ::bob)
+        (o/insert ::alice ::height 64)
+        (o/insert ::charlie ::color "red")
+        (o/insert ::charlie ::left-of ::alice)
+        (o/insert ::charlie ::height 72)
+        ((fn [session]
+           (let [facts (o/query-all session)
+                 ;; make a new session and insert the facts we retrieved
+                 new-session (reduce o/add-rule (o/->session) rules)
+                 new-session (reduce o/insert new-session facts)]
+             (is (= 9 (count facts)))
+             (is (= 3 (count (o/query-all new-session ::get-person))))
+             new-session))))))
+
 (deftest creating-a-ruleset
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset

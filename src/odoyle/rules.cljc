@@ -541,6 +541,8 @@
 
 (s/def ::insert-args
   (s/or
+    :single-combo (s/cat :session ::session
+                         :fact (s/tuple ::id ::attr ::value))
     :batch (s/cat :session ::session
                   :id ::id
                   :attr->value (s/map-of ::attr ::value))
@@ -563,6 +565,7 @@
   (s/conformer
     (fn [[kind args :as parsed-args]]
       (case kind
+        :single-combo (check-insert-spec (nth (:fact args) 1) (nth (:fact args) 2))
         :batch (some check-insert-spec (:attr->value args))
         :single (check-insert-spec (:attr args) (:value args)))
       parsed-args)))
@@ -572,6 +575,8 @@
 
 (defn insert
   "Inserts a fact into the session. Can optionally insert multiple facts with the same id."
+  ([session [id attr value]]
+   (insert session id attr value))
   ([session id attr->value]
    (reduce-kv (fn [session attr value]
                 (insert session id attr value))
@@ -643,21 +648,28 @@
 
 (s/fdef query-all
   :args (s/cat :session ::session
-               :rule-name qualified-keyword?))
+               :rule-name (s/? qualified-keyword?)))
 
 (defn query-all
-  "Returns a vector of maps containing all the matches for the given rule."
-  [session rule-name]
-  (let [rule-id (or (get-in session [:rule-ids rule-name])
-                    (throw (ex-info (str rule-name " not in session") {})))
-        rule (get-in session [:beta-nodes rule-id])]
-    (reduce-kv
-      (fn [v _ {:keys [vars enabled]}]
-        (if enabled
-          (conj v vars)
-          v))
-      []
-      (:matches rule))))
+  "When called with just a session, returns a vector of all inserted facts.
+  Otherwise, returns a vector of maps containing all the matches for the given rule."
+  ([session]
+   (mapv (fn [[[id attr] nodes]]
+           (-> (get-in session (first nodes))
+               (get-in [:facts id attr])
+               ((juxt :id :attr :value))))
+         (:id-attr-nodes session)))
+  ([session rule-name]
+   (let [rule-id (or (get-in session [:rule-ids rule-name])
+                     (throw (ex-info (str rule-name " not in session") {})))
+         rule (get-in session [:beta-nodes rule-id])]
+     (reduce-kv
+       (fn [v _ {:keys [vars enabled]}]
+         (if enabled
+           (conj v vars)
+           v))
+       []
+       (:matches rule)))))
 
 (defn reset!
   "Mutates the session from a :then block."
