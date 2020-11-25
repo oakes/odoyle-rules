@@ -9,9 +9,9 @@
 (s/def ::id #(or (qualified-keyword? %) (integer? %)))
 (s/def ::attr qualified-keyword?)
 (s/def ::value any?)
-(s/def ::what-id (s/or :binding simple-symbol? :value ::id))
+(s/def ::what-id (s/or :binding symbol? :value ::id))
 (s/def ::what-attr (s/or :value ::attr))
-(s/def ::what-value (s/or :binding simple-symbol? :value ::value))
+(s/def ::what-value (s/or :binding symbol? :value ::value))
 (s/def ::then boolean?)
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
@@ -117,6 +117,7 @@
         syms (->> conditions
                   (mapcat :bindings)
                   (map :sym)
+                  (filter simple-symbol?) ;; exclude qualified bindings from destructuring
                   set
                   vec)]
     {:rule-name rule-name
