@@ -18,11 +18,13 @@
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
 (s/def ::when-block (s/cat :header #{:when} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-block (s/cat :header #{:then} :body (s/+ #(not (keyword? %)))))
+(s/def ::then-finally-block (s/cat :header #{:then-finally} :body (s/+ #(not (keyword? %)))))
 
 (s/def ::rule (s/cat
                 :what-block ::what-block
                 :when-block (s/? ::when-block)
-                :then-block (s/? ::then-block)))
+                :then-block (s/? ::then-block)
+                :then-finally-block (s/? ::then-finally-block)))
 
 (s/def ::rules (s/map-of qualified-keyword? ::rule))
 
@@ -78,16 +80,18 @@
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
-                 rule-fn ;; fn
                  filter-fn ;; fn
+                 then-fn ;; fn
+                 then-finally-fn ;; fn
                  ])
 (defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
                     last-id ;; last id assigned to a beta node
-                    rule-fns ;; fns
+                    rule-fns ;; map of keyword -> fn
                     rule-ids ;; map of rule name -> the id of the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
+                    then-finally-queue ;; set of MemoryNode ids that need executed
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -107,13 +111,14 @@
       (add-to-condition :value value)))
 
 (defn ->rule [[rule-name rule]]
-  (let [{:keys [what-block when-block then-block]} rule
+  (let [{:keys [what-block when-block then-block then-finally-block]} rule
         conditions (mapv ->condition (:body what-block))
         when-body (:body when-block)
         when-body (if (> (count when-body) 1)
                     (cons 'and when-body)
                     (first when-body))
         then-body (:body then-block)
+        then-finally-body (:body then-finally-block)
         syms (->> conditions
                   (mapcat :bindings)
                   (map :sym)
@@ -127,7 +132,8 @@
      :conditions conditions
      :arg {:keys syms}
      :when-body when-body
-     :then-body then-body}))
+     :then-body then-body
+     :then-finally-body then-finally-body}))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]
@@ -291,12 +297,15 @@
                 (update-in node-path assoc-in [:matches id+attrs]
                            (->Match vars enabled?))
                 (cond-> (and leaf-node? (:trigger node))
-                        (update :then-queue conj [node-id id+attrs]))
+                        (-> (update :then-queue conj [node-id id+attrs])
+                            (update :then-finally-queue conj node-id)))
                 (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
                            conj id+attr))
             :retract
             (-> $
                 (update-in node-path update :matches dissoc id+attrs)
+                (cond-> leaf-node?
+                        (update :then-finally-queue conj node-id))
                 (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
                            disj id+attr)))
           (if-let [join-node-id (:child-id node)]
@@ -427,36 +436,69 @@
 (defn fire-rules
   "Fires :then blocks for any rules with a complete set of matches."
   [session]
-  (let [then-queue (:then-queue session)]
-    (if (and (seq then-queue)
+  (let [then-queue (:then-queue session)
+        then-finally-queue (:then-finally-queue session)]
+    (if (and (or (seq then-queue) (seq then-finally-queue))
              ;; don't trigger :then blocks while inside a rule
              (nil? *session*))
-      (let [*trigger-queue (volatile! []) ;; a vector of fns and args to run
+      (let [;; reset state
+            session (assoc session :then-queue #{} :then-finally-queue #{})
             session (reduce
-                      (fn [session [node-id id+attrs]]
-                        (let [node-path [:beta-nodes node-id]
-                              node (get-in session node-path)
-                              {:keys [matches rule-name]} node
-                              rule-fn (or (get-in session [:rule-fns rule-name])
-                                          (throw (ex-info (str rule-name " not found") {})))]
-                          (when-let [{:keys [vars enabled]} (get matches id+attrs)]
-                            (when enabled
-                              (vswap! *trigger-queue conj [rule-fn vars])))
+                      (fn [session [node-id _]]
+                        (let [node-path [:beta-nodes node-id]]
                           (update-in session node-path assoc :trigger false)))
                       session
                       then-queue)
-            session (assoc session :then-queue #{})]
-        (->> @*trigger-queue
-             (reduce
-               (fn [session [rule-fn match]]
-                 (binding [*session* session
-                           *mutable-session* (volatile! session)
-                           *match* match]
-                   (rule-fn match)
-                   @*mutable-session*))
-               session)
-             ;; recur because there may be new :then blocks to execute
-             fire-rules))
+            ;; find all :then functions to run
+            then-fns
+              (reduce
+                (fn [queue [node-id id+attrs]]
+                  (let [node-path [:beta-nodes node-id]
+                        node (get-in session node-path)
+                        {:keys [matches rule-name]} node
+                        rule-fns (or (get-in session [:rule-fns rule-name])
+                                     (throw (ex-info (str rule-name " not found") {})))]
+                    (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
+                          (when enabled
+                            (conj queue [(:then rule-fns) vars])))
+                        queue)))
+                []
+                then-queue)
+            ;; execute :then functions
+            session
+              (reduce
+                (fn [session [then-fn match]]
+                  (binding [*session* session
+                            *mutable-session* (volatile! session)
+                            *match* match]
+                    (then-fn match)
+                    @*mutable-session*))
+                session
+                then-fns)
+            ;; find all :then-finally functions to run
+            then-finally-fns
+              (reduce
+                (fn [queue node-id]
+                  (let [node-path [:beta-nodes node-id]
+                        node (get-in session node-path)
+                        {:keys [rule-name]} node
+                        rule-fns (or (get-in session [:rule-fns rule-name])
+                                     (throw (ex-info (str rule-name " not found") {})))]
+                    (conj queue (:then-finally rule-fns))))
+                []
+                then-finally-queue)
+            ;; execute :then-finally functions
+            session
+              (reduce
+                (fn [session then-finally-fn]
+                  (binding [*session* session
+                            *mutable-session* (volatile! session)]
+                    (then-finally-fn)
+                    @*mutable-session*))
+                session
+                then-finally-fns)]
+        ;; recur because there may be new :then blocks to execute
+        (fire-rules session))
       session)))
 
 (defn add-rule
@@ -503,7 +545,8 @@
     (-> session
         (assoc-in [:beta-nodes leaf-node-id :filter-fn] (:filter-fn rule))
         (assoc-in [:rule-ids (:name rule)] leaf-node-id)
-        (assoc-in [:rule-fns (:name rule)] (:rule-fn rule))
+        (assoc-in [:rule-fns (:name rule)] {:then (:then-fn rule)
+                                            :then-finally (:then-finally-fn rule)})
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
@@ -511,12 +554,13 @@
   "Returns a vector of rules after transforming the given map."
   [rules]
   (reduce
-    (fn [v {:keys [rule-name fn-name conditions then-body when-body arg]}]
+    (fn [v {:keys [rule-name fn-name conditions then-body then-finally-body when-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition '~conditions)
-                       (fn ~fn-name [~arg] ~@then-body)
                        ~(when (some? when-body)
-                          `(fn [~arg] ~when-body)))))
+                          `(fn [~arg] ~when-body))
+                       (fn ~fn-name [~arg] ~@then-body)
+                       (fn ~fn-name [] ~@then-finally-body))))
     []
     (mapv ->rule (parse ::rules rules))))
 

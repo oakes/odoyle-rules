@@ -576,7 +576,6 @@
            (is (= 3 @*count))
            session)))))
 
-
 (deftest avoid-unnecessary-rule-firings
   (let [*count (atom 0)]
     (-> (reduce o/add-rule (o/->session)
@@ -599,4 +598,42 @@
         o/fire-rules
         ((fn [session]
            (is (= 3 @*count))
+           session)))))
+
+(deftest then-finally
+  (let [*trigger-count (atom 0)
+        *all-people (atom [])]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::get-person
+             [:what
+              [id ::color color]
+              [id ::left-of left-of]
+              [id ::height height]
+              :then-finally
+              (->> (o/query-all o/*session* ::get-person)
+                   (o/insert o/*session* ::people ::all)
+                   o/reset!)]
+             ::all-people
+             [:what
+              [::people ::all all-people]
+              :then
+              (reset! *all-people all-people)
+              (swap! *trigger-count inc)]}))
+        (o/insert ::bob ::color "blue")
+        (o/insert ::bob ::left-of ::zach)
+        (o/insert ::bob ::height 72)
+        (o/insert ::alice ::color "blue")
+        (o/insert ::alice ::left-of ::zach)
+        (o/insert ::alice ::height 72)
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 (count @*all-people)))
+           (is (= 1 @*trigger-count))
+           session))
+        (o/retract ::alice ::color)
+        o/fire-rules
+        ((fn [session]
+           (is (= 1 (count @*all-people)))
+           (is (= 2 @*trigger-count))
            session)))))
