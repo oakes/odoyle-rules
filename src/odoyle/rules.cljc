@@ -6,7 +6,7 @@
 
 ;; parsing
 
-(s/def ::id #(or (qualified-keyword? %) (integer? %)))
+(s/def ::id any?)
 (s/def ::attr qualified-keyword?)
 (s/def ::value any?)
 (s/def ::what-id (s/or :binding symbol? :value ::id))
