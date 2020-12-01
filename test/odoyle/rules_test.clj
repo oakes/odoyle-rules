@@ -279,6 +279,10 @@
         (o/insert ::charlie ::color "red")
         (o/insert ::charlie ::left-of ::alice)
         (o/insert ::charlie ::height 72)
+        ;; insert and retract a fact to make sure
+        ;; it isn't returned by query-all
+        (o/insert ::zach ::color "blue")
+        (o/retract ::zach ::color)
         ((fn [session]
            (let [facts (o/query-all session)
                  ;; make a new session and insert the facts we retrieved

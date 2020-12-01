@@ -346,10 +346,14 @@
             :retract
             (-> $
                 (update-in node-path update-in [:facts id] dissoc attr)
-                (update-in [:id-attr-nodes id+attr]
-                           (fn [node-paths]
-                             (assert (contains? node-paths node-path))
-                             (disj node-paths node-path))))
+                (update :id-attr-nodes
+                        (fn [nodes]
+                          (let [node-paths (get nodes id+attr)
+                                _ (assert (contains? node-paths node-path))
+                                node-paths (disj node-paths node-path)]
+                            (if (seq node-paths)
+                              (assoc nodes id+attr node-paths)
+                              (dissoc nodes id+attr))))))
             :update
             (-> $
                 (update-in node-path update-in [:facts id attr]
