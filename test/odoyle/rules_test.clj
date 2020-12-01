@@ -641,3 +641,40 @@
            (is (= 1 (count @*all-people)))
            (is (= 2 @*trigger-count))
            session)))))
+
+;; based on https://github.com/raquo/Airstream#frp-glitches
+(deftest frp-glitch
+  (let [*output (atom [])]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::is-positive
+             [:what
+              [::number ::any any-num]
+              :then
+              (o/insert! ::number ::positive? (pos? any-num))]
+             
+             ::doubled-numbers
+             [:what
+              [::number ::any any-num]
+              :then
+              (o/insert! ::number ::doubled (* 2 any-num))]
+             
+             ::combined
+             [:what
+              [::number ::positive? positive?]
+              [::number ::doubled doubled]
+              :then
+              (o/insert! ::number ::combined [doubled positive?])]
+             
+             ::print-combined
+             [:what
+              [::number ::combined combined]
+              :then
+              (swap! *output conj combined)]}))
+        (o/insert ::number ::any -1)
+        o/fire-rules
+        (o/insert ::number ::any 1)
+        o/fire-rules
+        ((fn [session]
+           (is (= @*output [[-2 false] [2 true]]))
+           session)))))
