@@ -30,7 +30,6 @@ Advantages compared to Clara:
 Disadvantages compared to Clara:
 
 * Clara supports [truth maintenance](https://www.clara-rules.org/docs/truthmaint/), which can be a very useful feature in some domains.
-* Clara supports [accumulators](https://www.clara-rules.org/docs/accumulators/) for gathering multiple facts together for use in a rule.
 * Clara is faster. I'm still working through the '95 Doorenbos paper so my optimizations aren't even in this century yet.
 
 The design of O'Doyle is almost a carbon copy of my Nim rules engine, [pararules](https://github.com/paranim/pararules).
@@ -269,7 +268,7 @@ Now we can add multiple things with those two attributes and get them back in a 
 
 ## Generating ids
 
-In addition to keywords like `::player`, it is likely that you'll want to generate ids at runtime. For example, if you just want to spawn random enemies, you probably don't want to create a special keyword for each one. For this reason, `insert` allows you to just pass arbitrary integers as ids:
+So far our ids have been keywords like `::player`, but you can use anything as an id. For example, if you want to spawn random enemies, you probably don't want to create a special keyword for each one. Instead, you can pass arbitrary integers as ids:
 
 ```clj
 (swap! *session
@@ -282,6 +281,104 @@ In addition to keywords like `::player`, it is likely that you'll want to genera
 
 (println (o/query-all @*session ::get-character))
 ;; => [{:id 0, :x 14, :y 45} {:id 1, :x 12, :y 48} {:id 2, :x 48, :y 25} {:id 3, :x 4, :y 25} {:id 4, :x 39, :y 0}]
+```
+
+## Derived facts
+
+Sometimes we want to make a rule that receives a *collection* of facts. In Clara, this is done with [accumulators](https://www.clara-rules.org/docs/accumulators/). In O'Doyle, this is done by creating facts that are derived from other facts.
+
+If you want to create a fact that contains all characters, one clever way to do it is to run a query in the `::get-character` rule, and insert the result as a new fact:
+
+```clj
+(def rules
+  (o/ruleset
+    {::get-character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then
+      (->> (o/query-all o/*session* ::get-character)
+           (o/insert o/*session* ::derived ::all-characters)
+           o/reset!)]
+
+     ::print-all-characters
+     [:what
+      [::derived ::all-characters all-characters]
+      :then
+      (println "All characters:" all-characters)]}))
+```
+
+Every time *any* character is updated, the query is run again and the derived fact is updated. When we insert our random enemies, it seems to work:
+
+```clj
+(swap! *session
+  (fn [session]
+    (o/fire-rules
+      (reduce (fn [session id]
+                (o/insert session id {::x (rand-int 50) ::y (rand-int 50)}))
+              session
+              (range 5)))))
+;; => All characters: [{:id 0, :x 14, :y 45} {:id 1, :x 12, :y 48} {:id 2, :x 48, :y 25} {:id 3, :x 4, :y 25} {:id 4, :x 39, :y 0}]
+```
+
+But what happens if we retract one?
+
+```clj
+(swap! *session
+  (fn [session]
+    (-> session
+        (o/retract 0 ::x)
+        (o/retract 0 ::y)
+        o/fire-rules)))
+```
+
+It didn't print, which means the `::all-characters` fact hasn't been updated! This is because `:then` blocks only run on insertions, not retractions. After all, if facts pertinent to a rule are retracted, the match will be incomplete, and there will be nothing to bind the symbols from the `:what` block to.
+
+The solution is to use `:then-finally`:
+
+```clj
+::get-character
+[:what
+ [id ::x x]
+ [id ::y y]
+ :then-finally
+ (->> (o/query-all o/*session* ::get-character)
+      (o/insert o/*session* ::derived ::all-characters)
+      o/reset!)]
+```
+
+A `:then-finally` block runs when a rule's matches are changed at all, including from retractions. This also means you won't have access to the bindings from the `:what` block, so if you want to run code on each individual match, you need to use a normal `:then` block before it.
+
+## Serializing a session
+
+To save a session to the disk or send it over a network, we need to serialize it somehow. While O'Doyle sessions are mostly pure clojure data, it wouldn't be a good idea to directly serialize them. It would prevent you from updating your rules, or possibly even the version of this library, due to all the implementation details contained in the session map after deserializing it.
+
+Instead, it makes more sense to just serialize the *facts*. There is an arity of `query-all` that returns a vector of all the individual facts that were inserted:
+
+```clj
+(println (o/query-all @*session))
+;; => [[3 :examples.odoyle/y 42] [2 :examples.odoyle/y 39] [2 :examples.odoyle/x 37] [:examples.odoyle/derived :examples.odoyle/all-characters [{:id 1, :x 46, :y 30} {:id 2, :x 37, :y 39} {:id 3, :x 43, :y 42} {:id 4, :x 6, :y 26}]] [3 :examples.odoyle/x 43] [1 :examples.odoyle/y 30] [1 :examples.odoyle/x 46] [4 :examples.odoyle/y 26] [4 :examples.odoyle/x 6]]
+```
+
+Notice that it includes the `::all-characters` derived fact that we made before. There is no need to serialize derived facts -- they can be derived later, so it's a waste of space. We can filter them out before serializing:
+
+```clj
+(def facts (->> (o/query-all @*session)
+                (remove (fn [[id]]
+                          (= id ::derived)))))
+
+(spit "facts.edn" (pr-str facts))
+```
+
+Later on, we can read the facts and insert them into a new session:
+
+```clj
+(def facts (clojure.edn/read-string (slurp "facts.edn")))
+
+(swap! *session
+  (fn [session]
+    (o/fire-rules
+      (reduce o/insert session facts))))
 ```
 
 ## Spec integration

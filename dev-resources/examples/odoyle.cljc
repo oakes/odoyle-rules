@@ -157,6 +157,71 @@
 
 ;; example 8
 
+(defn test-derived-fact! [rules]
+  (reset! *session (reduce o/add-rule (o/->session) rules))
+  (swap! *session
+    (fn [session]
+      (o/fire-rules
+        (reduce (fn [session id]
+                  (o/insert session id {::x (rand-int 50) ::y (rand-int 50)}))
+                session
+                (range 5)))))
+  (swap! *session
+    (fn [session]
+      (-> session
+          (o/retract 0 ::x)
+          (o/retract 0 ::y)
+          o/fire-rules))))
+
+(test-derived-fact!
+  (o/ruleset
+    {::get-character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then
+      (->> (o/query-all o/*session* ::get-character)
+           (o/insert o/*session* ::derived ::all-characters)
+           o/reset!)]
+
+     ::print-all-characters
+     [:what
+      [::derived ::all-characters all-characters]
+      :then
+      (println "All characters:" all-characters)]}))
+
+(test-derived-fact!
+  (o/ruleset
+    {::get-character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then-finally
+      (->> (o/query-all o/*session* ::get-character)
+           (o/insert o/*session* ::derived ::all-characters)
+           o/reset!)]
+
+     ::print-all-characters
+     [:what
+      [::derived ::all-characters all-characters]
+      :then
+      (println "All characters:" all-characters)]}))
+
+;; example 9
+
+(def facts (->> (o/query-all @*session)
+                (remove (fn [[id]]
+                          (= id ::derived)))
+                pr-str
+                clojure.edn/read-string))
+
+(swap! *session
+  (fn [session]
+    (o/fire-rules
+      (reduce o/insert session facts))))
+
+;; example 10
+
 (s/def ::x number?)
 (s/def ::y number?)
 (s/def ::width (s/and number? pos?))
