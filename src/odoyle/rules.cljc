@@ -60,9 +60,10 @@
                        child-id ;; JoinNode id
                        leaf-node-id ;; id of the MemoryNode at the end (same as id if this is the leaf node)
                        condition ;; Condition associated with this node
-                       rule-name ;; keyword
                        matches ;; map of id+attrs -> Match
-                       filter-fn ;; the :when condition in a function
+                       when-fn ;; fn
+                       then-fn ;; fn
+                       then-finally-fn ;; fn
                        trigger ;; boolean indicating that the :then block can be triggered
                        ])
 (defrecord JoinNode [id
@@ -80,14 +81,13 @@
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
-                 filter-fn ;; fn
+                 when-fn ;; fn
                  then-fn ;; fn
                  then-finally-fn ;; fn
                  ])
 (defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
                     last-id ;; last id assigned to a beta node
-                    rule-fns ;; map of keyword -> fn
                     rule-ids ;; map of rule name -> the id of the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
@@ -173,7 +173,6 @@
                                    :child-id nil
                                    :leaf-node-id nil
                                    :condition condition
-                                   :rule-name nil
                                    :matches {}
                                    :trigger false})
         join-node (map->JoinNode {:id join-node-id
@@ -286,31 +285,35 @@
         ;; return in query results
         enabled? (boolean
                    (or (not leaf-node?)
-                       (nil? (:filter-fn node))
-                       ((:filter-fn node) vars)))
+                       (nil? (:when-fn node))
+                       ((:when-fn node) vars)))
         ;; the id+attr of this token is the last one in the vector
-        id+attr (last id+attrs)]
-    (as-> session $
-          (case (:kind token)
-            (:insert :update)
-            (-> $
-                (update-in node-path assoc-in [:matches id+attrs]
-                           (->Match vars enabled?))
-                (cond-> (and leaf-node? (:trigger node))
-                        (-> (update :then-queue conj [node-id id+attrs])
-                            (update :then-finally-queue conj node-id)))
-                (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
-                           conj id+attr))
-            :retract
-            (-> $
-                (update-in node-path update :matches dissoc id+attrs)
-                (cond-> leaf-node?
-                        (update :then-finally-queue conj node-id))
-                (update-in [:beta-nodes (:parent-id node) :old-id-attrs]
-                           disj id+attr)))
-          (if-let [join-node-id (:child-id node)]
-            (left-activate-join-node $ join-node-id id+attrs vars token)
-            $))))
+        id+attr (last id+attrs)
+        session (case (:kind token)
+                  (:insert :update)
+                  (as-> session $
+                        (update-in $ node-path assoc-in [:matches id+attrs]
+                                   (->Match vars enabled?))
+                        (if (and leaf-node? (:trigger node))
+                          (cond-> $
+                                  (:then-fn node)
+                                  (update :then-queue conj [node-id id+attrs])
+                                  (:then-finally-fn node)
+                                  (update :then-finally-queue conj node-id))
+                          $)
+                        (update-in $ [:beta-nodes (:parent-id node) :old-id-attrs]
+                                   conj id+attr))
+                  :retract
+                  (as-> session $
+                        (update-in $ node-path update :matches dissoc id+attrs)
+                        (if (and leaf-node? (:then-finally-fn node))
+                          (update $ :then-finally-queue conj node-id)
+                          $)
+                        (update-in $ [:beta-nodes (:parent-id node) :old-id-attrs]
+                                   disj id+attr)))]
+    (if-let [join-node-id (:child-id node)]
+      (left-activate-join-node session join-node-id id+attrs vars token)
+      session)))
 
 (defn- right-activate-join-node [session node-id id+attr token]
   (let [node (get-in session [:beta-nodes node-id])]
@@ -459,12 +462,10 @@
                 (fn [queue [node-id id+attrs]]
                   (let [node-path [:beta-nodes node-id]
                         node (get-in session node-path)
-                        {:keys [matches rule-name]} node
-                        rule-fns (or (get-in session [:rule-fns rule-name])
-                                     (throw (ex-info (str rule-name " not found") {})))]
+                        {:keys [matches then-fn]} node]
                     (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
                           (when enabled
-                            (conj queue [(:then rule-fns) vars])))
+                            (conj queue [then-fn vars])))
                         queue)))
                 []
                 then-queue)
@@ -485,10 +486,8 @@
                 (fn [queue node-id]
                   (let [node-path [:beta-nodes node-id]
                         node (get-in session node-path)
-                        {:keys [rule-name]} node
-                        rule-fns (or (get-in session [:rule-fns rule-name])
-                                     (throw (ex-info (str rule-name " not found") {})))]
-                    (conj queue (:then-finally rule-fns))))
+                        {:keys [then-finally-fn]} node]
+                    (conj queue then-finally-fn)))
                 []
                 then-finally-queue)
             ;; execute :then-finally functions
@@ -508,22 +507,19 @@
 (defn add-rule
   "Adds a rule to the given session."
   [session rule]
-  (when (get-in session [:rule-fns (:name rule)])
+  (when (get-in session [:rule-ids (:name rule)])
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
         session (reduce add-condition session conditions)
         leaf-node-id (-> session :mem-node-ids last)
         ;; the bindings (symbols) from the :what block
         bindings (:bindings session)
-        ;; update all memory nodes with:
-        ;; 1. the rule name
-        ;; 2. the id of their leaf node
+        ;; update all memory nodes with
+        ;; the id of their leaf node
         session (reduce (fn [session mem-node-id]
                           (update-in session [:beta-nodes mem-node-id]
                                      (fn [mem-node]
-                                       (assoc mem-node
-                                              :rule-name (:name rule)
-                                              :leaf-node-id leaf-node-id))))
+                                       (assoc mem-node :leaf-node-id leaf-node-id))))
                         session
                         (:mem-node-ids session))
         ;; update all join nodes with:
@@ -547,10 +543,10 @@
                         session
                         (:join-node-ids session))]
     (-> session
-        (assoc-in [:beta-nodes leaf-node-id :filter-fn] (:filter-fn rule))
+        (assoc-in [:beta-nodes leaf-node-id :when-fn] (:when-fn rule))
+        (assoc-in [:beta-nodes leaf-node-id :then-fn] (:then-fn rule))
+        (assoc-in [:beta-nodes leaf-node-id :then-finally-fn] (:then-finally-fn rule))
         (assoc-in [:rule-ids (:name rule)] leaf-node-id)
-        (assoc-in [:rule-fns (:name rule)] {:then (:then-fn rule)
-                                            :then-finally (:then-finally-fn rule)})
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
@@ -558,13 +554,15 @@
   "Returns a vector of rules after transforming the given map."
   [rules]
   (reduce
-    (fn [v {:keys [rule-name fn-name conditions then-body then-finally-body when-body arg]}]
+    (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition '~conditions)
-                       ~(when (some? when-body)
-                          `(fn [~arg] ~when-body))
-                       (fn ~fn-name [~arg] ~@then-body)
-                       (fn ~fn-name [] ~@then-finally-body))))
+                       ~(when (some? when-body) ;; need some? because it could be `false`
+                          `(fn ~fn-name [~arg] ~when-body))
+                       ~(when then-body
+                          `(fn ~fn-name [~arg] ~@then-body))
+                       ~(when then-finally-body
+                          `(fn ~fn-name [] ~@then-finally-body)))))
     []
     (mapv ->rule (parse ::rules rules))))
 
@@ -580,7 +578,6 @@
                                   :facts {}})
      :beta-nodes {}
      :last-id -1
-     :rule-fns {}
      :rule-ids {}
      :id-attr-nodes {}
      :then-queue #{}}))
