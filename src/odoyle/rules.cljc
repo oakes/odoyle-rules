@@ -611,7 +611,7 @@
     (fn [[kind args :as parsed-args]]
       (case kind
         :single-combo (check-insert-spec (nth (:fact args) 1) (nth (:fact args) 2))
-        :batch (some check-insert-spec (:attr->value args))
+        :batch (run! check-insert-spec (:attr->value args))
         :single (check-insert-spec (:attr args) (:value args)))
       parsed-args)))
 
