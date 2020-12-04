@@ -1,5 +1,5 @@
 (require
-  'examples.odoyle
+  'odoyle.readme
   '[figwheel.main :as figwheel])
 
 (figwheel/-main "--build" "dev")

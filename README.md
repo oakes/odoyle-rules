@@ -263,7 +263,7 @@ Now we can add multiple things with those two attributes and get them back in a 
       o/fire-rules))
 
 (println (o/query-all @*session ::get-character))
-;; => [{:id :examples.odoyle/player, :x 20, :y 15} {:id :examples.odoyle/enemy, :x 5, :y 5}]
+;; => [{:id :odoyle.readme/player, :x 20, :y 15} {:id :odoyle.readme/enemy, :x 5, :y 5}]
 ```
 
 ## Generating ids
@@ -357,7 +357,7 @@ Instead, it makes more sense to just serialize the *facts*. There is an arity of
 
 ```clj
 (println (o/query-all @*session))
-;; => [[3 :examples.odoyle/y 42] [2 :examples.odoyle/y 39] [2 :examples.odoyle/x 37] [:examples.odoyle/derived :examples.odoyle/all-characters [{:id 1, :x 46, :y 30} {:id 2, :x 37, :y 39} {:id 3, :x 43, :y 42} {:id 4, :x 6, :y 26}]] [3 :examples.odoyle/x 43] [1 :examples.odoyle/y 30] [1 :examples.odoyle/x 46] [4 :examples.odoyle/y 26] [4 :examples.odoyle/x 6]]
+;; => [[3 :odoyle.readme/y 42] [2 :odoyle.readme/y 39] [2 :odoyle.readme/x 37] [:odoyle.readme/derived :odoyle.readme/all-characters [{:id 1, :x 46, :y 30} {:id 2, :x 37, :y 39} {:id 3, :x 43, :y 42} {:id 4, :x 6, :y 26}]] [3 :odoyle.readme/x 43] [1 :odoyle.readme/y 30] [1 :odoyle.readme/x 46] [4 :odoyle.readme/y 26] [4 :odoyle.readme/x 6]]
 ```
 
 Notice that it includes the `::all-characters` derived fact that we made before. There is no need to serialize derived facts -- they can be derived later, so it's a waste of space. We can filter them out before serializing:
@@ -407,9 +407,9 @@ Notice that we've been using qualified keywords a lot. What else uses qualified 
 This will produce the following error:
 
 ```
-Error when checking attribute :examples.odoyle/width
+Error when checking attribute :odoyle.readme/width
 
-Syntax error (ExceptionInfo) compiling at (examples\odoyle.cljc:166:1).
+Syntax error (ExceptionInfo) compiling at (odoyle\readme.cljc:166:1).
 -- Spec failed --------------------
 
   0

@@ -1,4 +1,4 @@
-{:main          examples.odoyle
+{:main          odoyle.readme
  :optimizations :none
  :output-to     "dev-resources/public/main.js"
  :output-dir    "dev-resources/public/main.out"

@@ -1,7 +1,8 @@
-(ns examples.odoyle
+(ns odoyle.readme
   (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
             [clojure.spec.alpha :as s]
-            [clojure.spec.test.alpha :as st]))
+            [clojure.spec.test.alpha :as st]
+            [#?(:clj clojure.edn :cljs cljs.reader) :as edn]))
 
 (st/instrument)
 
@@ -213,7 +214,7 @@
                 (remove (fn [[id]]
                           (= id ::derived)))
                 pr-str
-                clojure.edn/read-string))
+                edn/read-string))
 
 (swap! *session
   (fn [session]
