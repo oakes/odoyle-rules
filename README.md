@@ -100,6 +100,7 @@ Updating the player's `::x` attribute isn't useful unless we can get the value e
       (-> o/*session*
           (o/insert ::player ::x tt)
           o/reset!)]
+
      ::get-player
      [:what
       [::player ::x x]
@@ -129,6 +130,7 @@ You can also query from inside a rule with the special `*session*` dynamic var:
      [:what
       [::player ::x x]
       [::player ::y y]]
+
      ::print-player-when-time-updates
      [:what
       [::time ::total tt]
@@ -153,6 +155,7 @@ Imagine you want to move the player's position based on its current position. So
      [:what
       [::player ::x x]
       [::player ::y y]]
+
      ::move-player
      [:what
       [::time ::delta dt]
