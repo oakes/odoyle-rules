@@ -430,7 +430,7 @@
 ;; public
 
 (def ^{:dynamic true
-       :doc "Provides the current value of the session from inside a :then block."}
+       :doc "Provides the current value of the session from inside a :then or :then-finally block."}
   *session* nil)
 
 (def ^{:dynamic true
@@ -441,12 +441,12 @@
   :args (s/cat :session ::session))
 
 (defn fire-rules
-  "Fires :then blocks for any rules with a complete set of matches."
+  "Fires :then and :then-finally blocks for any rules with a complete set of matches."
   [session]
   (let [then-queue (:then-queue session)
         then-finally-queue (:then-finally-queue session)]
     (if (and (or (seq then-queue) (seq then-finally-queue))
-             ;; don't trigger :then blocks while inside a rule
+             ;; don't fire while inside a rule
              (nil? *session*))
       (let [;; reset state
             session (assoc session :then-queue #{} :then-finally-queue #{})
@@ -500,7 +500,7 @@
                     @*mutable-session*))
                 session
                 then-finally-fns)]
-        ;; recur because there may be new :then blocks to execute
+        ;; recur because there may be new blocks to execute
         (fire-rules session))
       session)))
 
@@ -642,11 +642,11 @@
   :args (s/and ::insert!-args insert-conformer))
 
 (defn insert!
-  "Same as `insert` but can be used inside of a :then block.
+  "Equivalent to:
   
-  The function is DEPRECATED. It will never be removed, but prefer this instead:
+  (o/reset! (o/insert o/*session* id attr value))
   
-  (o/reset! (o/insert o/*session* id attr value))"
+  Using the long form is recommended."
   ([id attr->value]
    (run! (fn [[attr value]]
            (insert! id attr value))
@@ -654,7 +654,7 @@
   ([id attr value]
    (if *mutable-session*
      (vswap! *mutable-session* insert id attr value)
-     (throw (ex-info "This function must be called in a :then block" {})))))
+     (throw (ex-info "This function must be called in a :then or :then-finally block" {})))))
 
 (s/fdef retract
   :args (s/cat :session ::session
@@ -681,15 +681,15 @@
                :attr ::attr))
 
 (defn retract!
-  "Same as `retract` but can be used inside of a :then block.
+  "Equivalent to:
   
-  The function is DEPRECATED. It will never be removed, but prefer this instead:
+  (o/reset! (o/retract o/*session* id attr))
   
-  (o/reset! (o/retract o/*session* id attr))"
+  Using the long form is recommended."
   [id attr]
   (if *mutable-session*
     (vswap! *mutable-session* retract id attr)
-    (throw (ex-info "This function must be called in a :then block" {}))))
+    (throw (ex-info "This function must be called in a :then or :then-finally block" {}))))
 
 (s/fdef query-all
   :args (s/cat :session ::session
@@ -717,11 +717,11 @@
        (:matches rule)))))
 
 (defn reset!
-  "Mutates the session from a :then block."
+  "Mutates the session from a :then or :then-finally block."
   [new-session]
   (if *mutable-session*
     (if (= *session* @*mutable-session*)
       (vreset! *mutable-session* new-session)
-      (throw (ex-info "You may only call `reset!` once in a :then block" {})))
-    (throw (ex-info "You may only call `reset!` in a :then block" {}))))
+      (throw (ex-info "You may only call `reset!` once in a :then or :then-finally block" {})))
+    (throw (ex-info "You may only call `reset!` in a :then or :then-finally block" {}))))
 
