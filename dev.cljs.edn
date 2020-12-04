@@ -1,3 +1,5 @@
+^{:open-url "http://localhost:9500"
+  :clean-outputs true}
 {:main          odoyle.readme
  :optimizations :none
  :output-to     "dev-resources/public/main.js"

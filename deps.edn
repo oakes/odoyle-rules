@@ -4,7 +4,10 @@
                               com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
                  :extra-paths ["dev-resources"]
                  :main-opts ["dev.clj"]}
-           :docs {:extra-deps {dynadoc {:mvn/version "RELEASE"}}
+           :docs {:extra-deps {dynadoc {:mvn/version "RELEASE"}
+                               org.clojure/clojurescript {:mvn/version "1.10.764"}
+                               com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
+                  :extra-paths ["dev-resources" "doc-resources"]
                   :main-opts ["docs.clj"]}
            :prod {:extra-deps {leiningen {:mvn/version "2.9.0"}}
                   :main-opts ["prod.clj"]}
