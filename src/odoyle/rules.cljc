@@ -580,7 +580,8 @@
      :last-id -1
      :rule-ids {}
      :id-attr-nodes {}
-     :then-queue #{}}))
+     :then-queue #{}
+     :then-finally-queue #{}}))
 
 (s/def ::session #(instance? Session %))
 
