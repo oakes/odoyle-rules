@@ -1,8 +1,0 @@
-hs_err_pid*.log
-pom.xml
-pom.xml.asc
-target/
-dev-resources/public/main.js
-dev-resources/public/main.out
-.*
-!.gitignore
