@@ -61,11 +61,13 @@
        (fn []
          (let [game Game]
            game))
+
        :get-entities
        (fn []
          (let [entity Entity
                :accumulator (acc/all)]
            entity))
+
        :move-enemy
        (let [game Game
              player Entity
@@ -85,6 +87,7 @@
            (->> (move/move (:x enemy) (:y enemy) xv yv 0.1)
                 (merge enemy {:game-anchor game})
                 clara/insert-unconditional!)))
+
        :update-distance-from-player
        (let [player Entity
              :when (= (:kind player) :player)

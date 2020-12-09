@@ -13,13 +13,13 @@
 
 (require '[odoyle.benchmark.dungeon-crawler.core])
 
-(defmethod task "dungeon-crawler"
+(defmethod task "dungeon"
   [_]
   (odoyle.benchmark.dungeon-crawler.core/bench 100))
 
 (require '[odoyle.benchmark.dungeon-crawler.clara])
 
-(defmethod task "dungeon-crawler-clara"
+(defmethod task "dungeon-clara"
   [_]
   (odoyle.benchmark.dungeon-crawler.clara/bench 100))
 
