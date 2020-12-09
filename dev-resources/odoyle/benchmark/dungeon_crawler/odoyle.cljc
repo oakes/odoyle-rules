@@ -1,4 +1,4 @@
-(ns odoyle.benchmark.dungeon-crawler.core
+(ns odoyle.benchmark.dungeon-crawler.odoyle
   (:require [odoyle.benchmark.dungeon-crawler.move :as move]
             [odoyle.benchmark.dungeon-crawler.entities :as e]
             [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]))

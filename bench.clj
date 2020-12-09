@@ -11,11 +11,11 @@
   [_]
   (odoyle.benchmark.simple/bench 10000))
 
-(require '[odoyle.benchmark.dungeon-crawler.core])
+(require '[odoyle.benchmark.dungeon-crawler.odoyle])
 
 (defmethod task "dungeon"
   [_]
-  (odoyle.benchmark.dungeon-crawler.core/bench 100))
+  (odoyle.benchmark.dungeon-crawler.odoyle/bench 100))
 
 (require '[odoyle.benchmark.dungeon-crawler.clara])
 
