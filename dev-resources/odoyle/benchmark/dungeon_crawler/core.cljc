@@ -40,7 +40,7 @@
       (let [enemy {:x enemy-x :y enemy-y :x-velocity enemy-x-velocity :y-velocity enemy-y-velocity}
             player {:x player-x :y player-y :x-velocity player-x-velocity :y-velocity player-y-velocity}
             [xv yv] (move/get-enemy-velocity enemy player player-health distance-from-player)]
-        (->> (move/move enemy-x enemy-y xv yv 0.1)
+        (->> (move/move enemy-x enemy-y xv yv 0.1 true)
              (o/insert o/*session* eid)
              o/reset!))]
 

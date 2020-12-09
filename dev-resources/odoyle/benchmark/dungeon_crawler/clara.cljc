@@ -84,7 +84,7 @@
              :when (= (:id enemy) (:id distance-from-player))]
          (let [[xv yv] (move/get-enemy-velocity enemy player (:value player-health) (:value distance-from-player))]
            (clara/retract! enemy)
-           (->> (move/move (:x enemy) (:y enemy) xv yv 0.1)
+           (->> (move/move (:x enemy) (:y enemy) xv yv 0.1 false)
                 (merge enemy {:game-anchor game})
                 clara/insert-unconditional!)))
 

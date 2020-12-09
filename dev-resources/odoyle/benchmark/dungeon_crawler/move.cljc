@@ -58,17 +58,28 @@
            (.indexOf e/velocities)
            (nth e/directions)))
 
-(defn move [x y x-velocity y-velocity delta-time]
+(defn move [x y x-velocity y-velocity delta-time qualified-keys?]
   (let [x-change (-> (* x-velocity delta-time)
                      (max min-movement-per-frame)
                      (min max-movement-per-frame))
         y-change (-> (* y-velocity delta-time)
                      (max min-movement-per-frame)
-                     (min max-movement-per-frame))]
-    {::e/x-velocity (decelerate x-velocity)
-     ::e/y-velocity (decelerate y-velocity)
-     ::e/x-change x-change
-     ::e/y-change y-change
-     ::e/x (+ x x-change)
-     ::e/y (+ y y-change)}))
+                     (min max-movement-per-frame))
+        new-x-velocity (decelerate x-velocity)
+        new-y-velocity (decelerate y-velocity)
+        new-x (+ x x-change)
+        new-y (+ y y-change)]
+    (if qualified-keys?
+      {::e/x-velocity new-x-velocity
+       ::e/y-velocity new-y-velocity
+       ::e/x-change x-change
+       ::e/y-change y-change
+       ::e/x new-x
+       ::e/y new-y}
+      {:x-velocity new-x-velocity
+       :y-velocity new-y-velocity
+       :x-change x-change
+       :y-change y-change
+       :x new-x
+       :y new-y})))
 
