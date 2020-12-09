@@ -13,6 +13,7 @@
                   :main-opts ["prod.clj"]}
            :test {:extra-paths ["test"]
                   :main-opts ["test.clj"]}
-           :bench {:extra-deps {net.sekao/clarax {:mvn/version "0.4.1"}}
+           :bench {:extra-deps {net.sekao/clarax {:mvn/version "0.4.1"}
+                                datascript {:mvn/version "1.0.1"}}
                    :extra-paths ["dev-resources"]
                    :main-opts ["bench.clj"]}}}
