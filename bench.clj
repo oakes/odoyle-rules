@@ -5,29 +5,29 @@
   (println "Unknown benchmark:" task-name)
   (System/exit 1))
 
-(require '[odoyle.benchmark.simple])
+(require '[benchmark.simple])
 (defmethod task "simple"
   [_]
-  (odoyle.benchmark.simple/bench 10000))
+  (benchmark.simple/bench 10000))
 
-(require '[odoyle.benchmark.dungeon-crawler.odoyle])
+(require '[benchmark.dungeon-crawler.odoyle])
 (defmethod task "dungeon"
   [_]
-  (odoyle.benchmark.dungeon-crawler.odoyle/bench 100))
+  (benchmark.dungeon-crawler.odoyle/bench 100))
 
-(require '[odoyle.benchmark.dungeon-crawler.clara])
+(require '[benchmark.dungeon-crawler.clara])
 (defmethod task "dungeon-clara"
   [_]
-  (odoyle.benchmark.dungeon-crawler.clara/bench 100))
+  (benchmark.dungeon-crawler.clara/bench 100))
 
-(require '[odoyle.benchmark.people.odoyle])
+(require '[benchmark.people.odoyle])
 (defmethod task "people"
   [_]
-  (odoyle.benchmark.people.odoyle/bench))
+  (benchmark.people.odoyle/bench))
 
-(require '[odoyle.benchmark.people.datascript])
+(require '[benchmark.people.datascript])
 (defmethod task "people-datascript"
   [_]
-  (odoyle.benchmark.people.datascript/bench))
+  (benchmark.people.datascript/bench))
 
 (task *command-line-args*)

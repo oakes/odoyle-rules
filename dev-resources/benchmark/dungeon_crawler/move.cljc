@@ -1,7 +1,7 @@
-(ns odoyle.benchmark.dungeon-crawler.move
-  (:require [odoyle.benchmark.dungeon-crawler.entities :as e]
-            #?(:clj  [odoyle.benchmark.dungeon-crawler.macros-java :refer [math]]
-               :cljs [odoyle.benchmark.dungeon-crawler.macros-js :refer-macros [math]])))
+(ns benchmark.dungeon-crawler.move
+  (:require [benchmark.dungeon-crawler.entities :as e]
+            #?(:clj  [benchmark.dungeon-crawler.macros-java :refer [math]]
+               :cljs [benchmark.dungeon-crawler.macros-js :refer-macros [math]])))
 
 (def damping 0.1)
 (def max-velocity 4)

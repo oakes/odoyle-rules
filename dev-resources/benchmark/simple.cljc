@@ -1,4 +1,4 @@
-(ns odoyle.benchmark.simple
+(ns benchmark.simple
   (:require [odoyle.rules :as o]))
 
 (def initial-session

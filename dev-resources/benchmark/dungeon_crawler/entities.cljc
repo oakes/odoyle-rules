@@ -1,4 +1,4 @@
-(ns odoyle.benchmark.dungeon-crawler.entities)
+(ns benchmark.dungeon-crawler.entities)
 
 (def directions [:w :nw :n :ne
                  :e :se :s :sw])

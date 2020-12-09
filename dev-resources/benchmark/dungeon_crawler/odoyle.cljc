@@ -1,6 +1,6 @@
-(ns odoyle.benchmark.dungeon-crawler.odoyle
-  (:require [odoyle.benchmark.dungeon-crawler.move :as move]
-            [odoyle.benchmark.dungeon-crawler.entities :as e]
+(ns benchmark.dungeon-crawler.odoyle
+  (:require [benchmark.dungeon-crawler.move :as move]
+            [benchmark.dungeon-crawler.entities :as e]
             [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]))
 
 (def rules

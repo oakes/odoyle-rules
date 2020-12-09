@@ -1,7 +1,7 @@
-(ns odoyle.benchmark.people.datascript
+(ns benchmark.people.datascript
   (:require
     [datascript.core :as d]
-    [odoyle.benchmark.people.core :as core]))
+    [benchmark.people.core :as core]))
 
 (def schema
   {:follows {:db/valueType   :db.type/ref
