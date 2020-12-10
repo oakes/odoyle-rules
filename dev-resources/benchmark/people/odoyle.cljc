@@ -21,6 +21,6 @@
 (defn query [session]
   (o/query-all session ::get-ivan))
 
-(defn bench []
-  (time (query initial-session)))
+(defn run []
+  (query initial-session))
 

@@ -81,11 +81,10 @@
       (o/insert ::time ::total counter)
       o/fire-rules))
 
-(defn bench [iterations]
-  (time
-    (loop [session initial-session
-           counter 0]
-      (if (= counter iterations)
-        session
-        (recur (tick session counter) (inc counter))))))
+(defn run [iterations]
+  (loop [session initial-session
+         counter 0]
+    (if (= counter iterations)
+      session
+      (recur (tick session counter) (inc counter)))))
 

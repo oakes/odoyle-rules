@@ -8,26 +8,28 @@
 (require '[benchmark.simple])
 (defmethod task "simple"
   [_]
-  (benchmark.simple/bench 10000))
+  (time (benchmark.simple/run 10000)))
+
+(def dungeon-iterations 100)
 
 (require '[benchmark.dungeon-crawler.odoyle])
 (defmethod task "dungeon"
   [_]
-  (benchmark.dungeon-crawler.odoyle/bench 100))
+  (time (benchmark.dungeon-crawler.odoyle/run dungeon-iterations)))
 
 (require '[benchmark.dungeon-crawler.clara])
 (defmethod task "dungeon-clara"
   [_]
-  (benchmark.dungeon-crawler.clara/bench 100))
+  (time (benchmark.dungeon-crawler.clara/run dungeon-iterations)))
 
 (require '[benchmark.people.odoyle])
 (defmethod task "people"
   [_]
-  (benchmark.people.odoyle/bench))
+  (time (benchmark.people.odoyle/run)))
 
 (require '[benchmark.people.datascript])
 (defmethod task "people-datascript"
   [_]
-  (benchmark.people.datascript/bench))
+  (time (benchmark.people.datascript/run)))
 
 (task *command-line-args*)

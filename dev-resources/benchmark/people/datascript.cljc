@@ -22,6 +22,6 @@
                 [?e ::core/sex :male]]
     db))
 
-(defn bench []
-  (time (query initial-db)))
+(defn run []
+  (query initial-db))
 

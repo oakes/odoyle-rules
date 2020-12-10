@@ -23,10 +23,9 @@
       (o/insert ::george ::height 72)
       o/fire-rules))
 
-(defn bench [iterations]
-  (time
-    (loop [session initial-session
-           counter 0]
-      (if (= counter iterations)
-        session
-        (recur (tick session) (inc counter))))))
+(defn run [iterations]
+  (loop [session initial-session
+         counter 0]
+    (if (= counter iterations)
+      session
+      (recur (tick session) (inc counter)))))
