@@ -455,56 +455,36 @@
              (nil? *session*))
       (let [;; reset state
             session (assoc session :then-queue #{} :then-finally-queue #{})
+            ;; execute :then functions
             session (reduce
-                      (fn [session [node-id _]]
-                        (let [node-path [:beta-nodes node-id]]
+                      (fn [session [node-id id+attrs]]
+                        (let [node-path [:beta-nodes node-id]
+                              node (get-in session node-path)
+                              {:keys [matches then-fn]} node
+                              session (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
+                                            (when enabled
+                                              (binding [*session* session
+                                                        *mutable-session* (volatile! session)
+                                                        *match* vars]
+                                                (then-fn vars)
+                                                @*mutable-session*)))
+                                          session)]
                           (update-in session node-path assoc :trigger false)))
                       session
                       then-queue)
-            ;; find all :then functions to run
-            then-fns
-              (reduce
-                (fn [queue [node-id id+attrs]]
-                  (let [node-path [:beta-nodes node-id]
-                        node (get-in session node-path)
-                        {:keys [matches then-fn]} node]
-                    (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
-                          (when enabled
-                            (conj queue [then-fn vars])))
-                        queue)))
-                []
-                then-queue)
-            ;; execute :then functions
-            session
-              (reduce
-                (fn [session [then-fn match]]
-                  (binding [*session* session
-                            *mutable-session* (volatile! session)
-                            *match* match]
-                    (then-fn match)
-                    @*mutable-session*))
-                session
-                then-fns)
-            ;; find all :then-finally functions to run
-            then-finally-fns
-              (reduce
-                (fn [queue node-id]
-                  (let [node-path [:beta-nodes node-id]
-                        node (get-in session node-path)
-                        {:keys [then-finally-fn]} node]
-                    (conj queue then-finally-fn)))
-                []
-                then-finally-queue)
             ;; execute :then-finally functions
-            session
-              (reduce
-                (fn [session then-finally-fn]
-                  (binding [*session* session
-                            *mutable-session* (volatile! session)]
-                    (then-finally-fn)
-                    @*mutable-session*))
-                session
-                then-finally-fns)]
+            session (reduce
+                      (fn [session node-id]
+                        (let [node-path [:beta-nodes node-id]
+                              node (get-in session node-path)
+                              {:keys [then-finally-fn]} node
+                              session (binding [*session* session
+                                                *mutable-session* (volatile! session)]
+                                        (then-finally-fn)
+                                        @*mutable-session*)]
+                          (update-in session node-path assoc :trigger false)))
+                      session
+                      then-finally-queue)]
         ;; recur because there may be new blocks to execute
         (fire-rules session))
       session)))
