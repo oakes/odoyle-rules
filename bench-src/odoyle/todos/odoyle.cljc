@@ -28,7 +28,7 @@
 
 (defn add-facts [session]
   (-> (reduce (fn [session todo]
-                (o/insert session (:db/id todo) (assoc todo ::sub-todos [])))
+                (o/insert session (:db/id todo) todo))
         session core/todos)
       (o/insert ::todos ::by-id {})
       o/fire-rules))
