@@ -678,3 +678,50 @@
         ((fn [session]
            (is (= @*output [[-2 false] [2 true]]))
            session)))))
+
+(deftest recursion
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::get-person
+           [:what
+            [id ::color color]
+            [id ::left-of left-of]
+            [id ::height height]
+            [id ::friends friends {:then not=}]
+            :then-finally
+            (->> (o/query-all o/*session* ::get-person)
+                 (reduce #(assoc %1 (:id %2) %2) {})
+                 (o/insert! ::people ::by-id))]
+
+           ::update-friends
+           [:what
+            [id ::friend-ids friend-ids]
+            [::people ::by-id id->person]
+            :then
+            (->> (mapv id->person friend-ids)
+                 (o/insert! id ::friends))]}))
+      (o/insert ::bob ::color "blue")
+      (o/insert ::bob ::left-of ::zach)
+      (o/insert ::bob ::height 72)
+      (o/insert ::bob ::friend-ids [::alice ::charlie])
+      (o/insert ::alice ::color "blue")
+      (o/insert ::alice ::left-of ::zach)
+      (o/insert ::alice ::height 72)
+      (o/insert ::alice ::friend-ids [])
+      (o/insert ::charlie ::color "red")
+      (o/insert ::charlie ::left-of ::bob)
+      (o/insert ::charlie ::height 70)
+      (o/insert ::charlie ::friend-ids [::alice])
+      (o/insert ::people ::by-id {})
+      o/fire-rules
+      ((fn [session]
+         (let [people (o/query-all session ::get-person)
+               bob (first (filter #(= ::bob (:id %)) people))
+               alice (first (filter #(= ::alice (:id %)) people))
+               charlie (first (filter #(= ::charlie (:id %)) people))]
+           (is (= 3 (count people)))
+           (is (= [alice charlie] (:friends bob)))
+           (is (= [] (mapv :id (:friends alice))))
+           (is (= [alice] (:friends charlie))))
+         session))))
+
