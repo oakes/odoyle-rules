@@ -32,4 +32,14 @@
   (require '[benchmark.people.datascript])
   (time ((resolve 'benchmark.people.datascript/run))))
 
+(defmethod task "todos"
+  [_]
+  (require '[benchmark.todos.odoyle])
+  (println (time ((resolve 'benchmark.todos.odoyle/run)))))
+
+(defmethod task "todos-datascript"
+  [_]
+  (require '[benchmark.todos.datascript])
+  (println (time ((resolve 'benchmark.todos.datascript/run)))))
+
 (task *command-line-args*)

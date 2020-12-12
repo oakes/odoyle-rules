@@ -12,7 +12,7 @@
 (s/def ::what-id (s/or :binding symbol? :value ::id))
 (s/def ::what-attr (s/or :value ::attr))
 (s/def ::what-value (s/or :binding symbol? :value ::value))
-(s/def ::then boolean?)
+(s/def ::then (s/or :bool boolean? :func symbol?))
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
@@ -272,12 +272,21 @@
 (defn- left-activate-memory-node [session node-id id+attrs vars token new?]
   (let [node-path [:beta-nodes node-id]
         node (get-in session node-path)
+        ;; figure out if this token allows triggering
+        [then-type then] (-> node :condition :opts :then)
+        should-trigger? (cond
+                          (= :bool then-type)
+                          then
+                          (= :func then-type)
+                          (then (-> token :old-fact :value) (-> token :fact :value))
+                          :else
+                          true)
         ;; if this insert/update fact is new
         ;; and the condition doesn't have {:then false}
         ;; let the leaf node trigger
         session (if (and new?
                          (#{:insert :update} (:kind token))
-                         (-> node :condition :opts :then (not= false)))
+                         should-trigger?)
                   (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
                   session)
         node (get-in session node-path) ;; get node again since trigger may have updated
@@ -370,7 +379,7 @@
                        (get-in session [:beta-nodes child-id :disable-fast-updates]))
                 (-> session
                     (right-activate-join-node child-id id+attr (->Token (:old-fact token) :retract nil))
-                    (right-activate-join-node child-id id+attr (->Token (:fact token) :insert nil)))
+                    (right-activate-join-node child-id id+attr (->Token (:fact token) :insert (:old-fact token))))
                 (right-activate-join-node session child-id id+attr token)))
             $
             (:successors (get-in session node-path))))))
