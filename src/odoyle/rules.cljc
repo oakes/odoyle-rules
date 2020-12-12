@@ -280,7 +280,7 @@
                          (if-let [[then-type then] (-> node :condition :opts :then)]
                            (case then-type
                              :bool then
-                             :func (then (-> token :old-fact :value) (-> token :fact :value)))
+                             :func (then (-> token :fact :value) (-> token :old-fact :value)))
                            true))
                   (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
                   session)
