@@ -461,15 +461,15 @@
                         (let [node-path [:beta-nodes node-id]
                               node (get-in session node-path)
                               {:keys [matches then-fn]} node
-                              session (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
-                                            (when enabled
-                                              (binding [*session* session
-                                                        *mutable-session* (volatile! session)
-                                                        *match* vars]
-                                                (then-fn vars)
-                                                @*mutable-session*)))
-                                          session)]
-                          (update-in session node-path assoc :trigger false)))
+                              session (update-in session node-path assoc :trigger false)]
+                          (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
+                                (when enabled
+                                  (binding [*session* session
+                                            *mutable-session* (volatile! session)
+                                            *match* vars]
+                                    (then-fn vars)
+                                    @*mutable-session*)))
+                              session)))
                       session
                       then-queue)
             ;; execute :then-finally functions
@@ -478,11 +478,11 @@
                         (let [node-path [:beta-nodes node-id]
                               node (get-in session node-path)
                               {:keys [then-finally-fn]} node
-                              session (binding [*session* session
-                                                *mutable-session* (volatile! session)]
-                                        (then-finally-fn)
-                                        @*mutable-session*)]
-                          (update-in session node-path assoc :trigger false)))
+                              session (update-in session node-path assoc :trigger false)]
+                          (binding [*session* session
+                                    *mutable-session* (volatile! session)]
+                            (then-finally-fn)
+                            @*mutable-session*)))
                       session
                       then-finally-queue)]
         ;; recur because there may be new blocks to execute
