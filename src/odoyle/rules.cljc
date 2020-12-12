@@ -96,7 +96,7 @@
 
 (defn- add-to-condition [condition field [kind value]]
   (case kind
-    :binding (update condition :bindings conj (->Binding field value (keyword value)))
+    :binding (update condition :bindings conj (->Binding field (list 'quote value) (keyword value)))
     :value (update condition :nodes conj (map->AlphaNode {:path nil
                                                           :test-field field
                                                           :test-value value
@@ -122,6 +122,7 @@
         syms (->> conditions
                   (mapcat :bindings)
                   (map :sym)
+                  (map last) ;; must do this because we quoted it above
                   (filter simple-symbol?) ;; exclude qualified bindings from destructuring
                   set
                   vec)]
@@ -556,7 +557,7 @@
   (reduce
     (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
       (conj v `(->Rule ~rule-name
-                       (mapv map->Condition '~conditions)
+                       (mapv map->Condition ~conditions)
                        ~(when (some? when-body) ;; need some? because it could be `false`
                           `(fn ~fn-name [~arg] ~when-body))
                        ~(when then-body
