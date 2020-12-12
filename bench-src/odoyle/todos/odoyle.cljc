@@ -7,7 +7,7 @@
     {::todo
      [:what
       [id ::core/text text]
-      [id ::sub-todos sub-todos]
+      [id ::sub-todos sub-todos {:then not=}]
       :then-finally
       (->> (o/query-all o/*session* ::todo)
            (reduce #(assoc %1 (:id %2) %2) {})
@@ -21,7 +21,7 @@
      ::update-sub-todos
      [:what
       [id ::core/sub-todo-ids sub-todo-ids]
-      [::todos ::by-id id->todo {:then not=}]
+      [::todos ::by-id id->todo]
       :then
       (->> (mapv id->todo sub-todo-ids)
            (o/insert! id ::sub-todos))]}))
