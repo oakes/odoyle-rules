@@ -1,4 +1,4 @@
-(ns benchmark.dungeon-crawler.macros-js)
+(ns odoyle.dungeon-crawler.macros-js)
 
 (defmacro math
   "Wraps the Math object, calling a method if the provided symbol starts with a

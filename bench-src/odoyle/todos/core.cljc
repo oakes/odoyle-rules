@@ -1,4 +1,4 @@
-(ns benchmark.todos.core)
+(ns odoyle.todos.core)
 
 (def todos
   [{:db/id 1

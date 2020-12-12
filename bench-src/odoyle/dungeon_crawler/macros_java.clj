@@ -1,4 +1,4 @@
-(ns benchmark.dungeon-crawler.macros-java)
+(ns odoyle.dungeon-crawler.macros-java)
 
 (defmacro math
   "Wraps java.lang.Math, calling a method if the provided symbol starts with a

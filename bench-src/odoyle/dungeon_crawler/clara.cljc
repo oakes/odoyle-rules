@@ -1,6 +1,6 @@
-(ns benchmark.dungeon-crawler.clara
-  (:require [benchmark.dungeon-crawler.move :as move]
-            [benchmark.dungeon-crawler.entities :as e]
+(ns odoyle.dungeon-crawler.clara
+  (:require [odoyle.dungeon-crawler.move :as move]
+            [odoyle.dungeon-crawler.entities :as e]
             [clara.rules :as clara]
             [clara.rules.accumulators :as acc]
             #?(:clj  [clarax.macros-java :refer [->session]]

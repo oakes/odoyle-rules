@@ -1,4 +1,4 @@
-(ns benchmark.people.core)
+(ns odoyle.people.core)
 
 (def next-eid (volatile! 0))
 

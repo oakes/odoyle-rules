@@ -2,6 +2,6 @@
   :clean-outputs true}
 {:main          odoyle.readme
  :optimizations :none
- :output-to     "dev-resources/public/main.js"
- :output-dir    "dev-resources/public/main.out"
+ :output-to     "dev-src/public/main.js"
+ :output-dir    "dev-src/public/main.out"
  :asset-path    "/main.out"}

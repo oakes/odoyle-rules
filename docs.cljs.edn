@@ -1,7 +1,7 @@
 ^{:open-url "http://localhost:5000/cljs/odoyle.rules"
   :clean-outputs true
-  ;; don't watch doc-resources or figwheel will get into an infinite loop
-  :watch-dirs ["src" "dev-resources"]}
+  ;; don't watch doc-src or figwheel will get into an infinite loop
+  :watch-dirs ["src" "dev-src"]}
 {:main          odoyle.examples
  :optimizations :simple
  :output-to     "doc-resources/dynadoc-extend/main.js"
