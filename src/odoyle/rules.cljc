@@ -272,21 +272,16 @@
 (defn- left-activate-memory-node [session node-id id+attrs vars token new?]
   (let [node-path [:beta-nodes node-id]
         node (get-in session node-path)
-        ;; figure out if this token allows triggering
-        [then-type then] (-> node :condition :opts :then)
-        should-trigger? (cond
-                          (= :bool then-type)
-                          then
-                          (= :func then-type)
-                          (then (-> token :old-fact :value) (-> token :fact :value))
-                          :else
-                          true)
         ;; if this insert/update fact is new
         ;; and the condition doesn't have {:then false}
         ;; let the leaf node trigger
         session (if (and new?
                          (#{:insert :update} (:kind token))
-                         should-trigger?)
+                         (if-let [[then-type then] (-> node :condition :opts :then)]
+                           (case then-type
+                             :bool then
+                             :func (then (-> token :old-fact :value) (-> token :fact :value)))
+                           true))
                   (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
                   session)
         node (get-in session node-path) ;; get node again since trigger may have updated
