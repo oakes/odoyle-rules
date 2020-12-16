@@ -1,4 +1,4 @@
-(ns odoyle.simple
+(ns simple.odoyle
   (:require [odoyle.rules :as o]))
 
 (def initial-session

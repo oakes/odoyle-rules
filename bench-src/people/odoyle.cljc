@@ -1,6 +1,6 @@
-(ns odoyle.people.odoyle
+(ns people.odoyle
   (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
-            [odoyle.people.core :as core]))
+            [people.core :as core]))
 
 (defn init []
   (as-> (o/->session) $

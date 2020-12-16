@@ -1,7 +1,7 @@
-(ns odoyle.todos.datascript
+(ns todos.datascript
   (:require
     [datascript.core :as d]
-    [odoyle.todos.core :as core]))
+    [todos.core :as core]))
 
 (def schema
   {::core/text {:db/cardinality :db.cardinality/one}

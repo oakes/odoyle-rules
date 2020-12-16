@@ -1,6 +1,6 @@
-(ns odoyle.todos.odoyle
+(ns todos.odoyle
   (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
-            [odoyle.todos.core :as core]))
+            [todos.core :as core]))
 
 (def rules
   (o/ruleset

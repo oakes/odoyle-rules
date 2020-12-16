@@ -7,39 +7,39 @@
 
 (defmethod task "simple"
   [_]
-  (require '[odoyle.simple])
-  (time ((resolve 'odoyle.simple/run) 10000)))
+  (require '[simple.odoyle])
+  (time ((resolve 'simple.odoyle/run) 10000)))
 
 (def dungeon-iterations 100)
 
 (defmethod task "dungeon"
   [_]
-  (require '[odoyle.dungeon-crawler.odoyle])
-  (time ((resolve 'odoyle.dungeon-crawler.odoyle/run) dungeon-iterations)))
+  (require '[dungeon-crawler.odoyle])
+  (time ((resolve 'dungeon-crawler.odoyle/run) dungeon-iterations)))
 
 (defmethod task "dungeon-clara"
   [_]
-  (require '[odoyle.dungeon-crawler.clara])
-  (time ((resolve 'odoyle.dungeon-crawler.clara/run) dungeon-iterations)))
+  (require '[dungeon-crawler.clara])
+  (time ((resolve 'dungeon-crawler.clara/run) dungeon-iterations)))
 
 (defmethod task "people"
   [_]
-  (require '[odoyle.people.odoyle])
-  (time ((resolve 'odoyle.people.odoyle/run))))
+  (require '[people.odoyle])
+  (time ((resolve 'people.odoyle/run))))
 
 (defmethod task "people-datascript"
   [_]
-  (require '[odoyle.people.datascript])
-  (time ((resolve 'odoyle.people.datascript/run))))
+  (require '[people.datascript])
+  (time ((resolve 'people.datascript/run))))
 
 (defmethod task "todos"
   [_]
-  (require '[odoyle.todos.odoyle])
-  (println (time ((resolve 'odoyle.todos.odoyle/run)))))
+  (require '[todos.odoyle])
+  (println (time ((resolve 'todos.odoyle/run)))))
 
 (defmethod task "todos-datascript"
   [_]
-  (require '[odoyle.todos.datascript])
-  (println (time ((resolve 'odoyle.todos.datascript/run)))))
+  (require '[todos.datascript])
+  (println (time ((resolve 'todos.datascript/run)))))
 
 (task *command-line-args*)

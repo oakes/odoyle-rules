@@ -1,4 +1,4 @@
-(ns odoyle.todos.core)
+(ns todos.core)
 
 (def todos
   [{:db/id 1
