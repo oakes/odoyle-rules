@@ -1,4 +1,4 @@
-(ns todos.odoyle
+(ns todos.odoyle-alt
   (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
             [todos.core :as core]))
 
@@ -26,12 +26,25 @@
      ::root-todo
      [:what
       [1 ::core/text text]
-      [1 ::sub-todos sub-todos]]}))
+      [1 ::sub-todos sub-todos]]
+
+     ::update-sub-todo-ids
+     [:what
+      [id ::core/parent-id parent-id]
+      :then-finally
+      (let [todos (o/query-all o/*session* ::update-sub-todo-ids)
+            todos-by-parent (group-by :parent-id todos)]
+        (->> todos
+             (reduce
+               (fn [session {:keys [id]}]
+                 (o/insert session id ::core/sub-todo-ids (mapv :id (todos-by-parent id))))
+               o/*session*)
+             o/reset!))]}))
 
 (defn init [session]
   (-> (reduce (fn [session todo]
                 (o/insert session (:db/id todo) todo))
-        session core/todos)
+        session core/todos-alt)
       (o/insert ::todos ::by-id {})
       o/fire-rules))
 

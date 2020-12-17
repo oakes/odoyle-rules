@@ -2,7 +2,7 @@
 
 (defmethod task :default
   [[task-name]]
-  (println "Unknown odoyle:" task-name)
+  (println "Unknown benchmark:" task-name)
   (System/exit 1))
 
 (defmethod task "simple"
@@ -41,5 +41,10 @@
   [_]
   (require '[todos.datascript])
   (println (time ((resolve 'todos.datascript/run)))))
+
+(defmethod task "todos-alt"
+  [_]
+  (require '[todos.odoyle-alt])
+  (println (time ((resolve 'todos.odoyle-alt/run)))))
 
 (task *command-line-args*)
