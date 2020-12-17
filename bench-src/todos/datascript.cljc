@@ -12,13 +12,25 @@
 
 (def initial-db (init))
 
-(defn query [db]
+(defn query [db id]
   (d/pull db
     '[[:db/id]
       [::core/text :as :text]
       {[::core/sub-todo-ids :as :sub-todos] ...}]
-    1))
+    id))
 
-(defn run []
-  (query initial-db))
+;; benchmark
+
+(defn tick [db counter]
+  (let [random-id (inc (mod counter (count core/todos)))
+        random-todo-text (:text (query db random-id))]
+    (d/db-with db [{:db/id random-id
+                    ::core/text (str random-todo-text " " counter)}])))
+
+(defn run [iterations]
+  (loop [db initial-db
+         counter 0]
+    (if (= counter iterations)
+      db
+      (recur (tick db counter) (inc counter)))))
 

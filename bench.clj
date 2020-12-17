@@ -32,19 +32,21 @@
   (require '[people.datascript])
   (time ((resolve 'people.datascript/run))))
 
+(def todo-iterations 5000)
+
 (defmethod task "todos"
   [_]
   (require '[todos.odoyle])
-  (println (time ((resolve 'todos.odoyle/run)))))
+  (time ((resolve 'todos.odoyle/run) todo-iterations)))
 
 (defmethod task "todos-datascript"
   [_]
   (require '[todos.datascript])
-  (println (time ((resolve 'todos.datascript/run)))))
+  (time ((resolve 'todos.datascript/run) todo-iterations)))
 
 (defmethod task "todos-alt"
   [_]
   (require '[todos.odoyle-alt])
-  (println (time ((resolve 'todos.odoyle-alt/run)))))
+  (time ((resolve 'todos.odoyle-alt/run) todo-iterations)))
 
 (task *command-line-args*)

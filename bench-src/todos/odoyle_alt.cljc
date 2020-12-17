@@ -54,6 +54,22 @@
 (defn query [session]
   (first (o/query-all session ::root-todo)))
 
-(defn run []
-  (query initial-session))
+;; benchmark
+
+(defn tick [session counter]
+  (let [random-id (inc (mod counter (count core/todos)))
+        id->todo (-> (o/query-all session ::update-sub-todos)
+                     first
+                     :id->todo)
+        random-todo-text (:text (id->todo random-id))]
+    (-> session
+        (o/insert random-id ::core/text (str random-todo-text " " counter))
+        o/fire-rules)))
+
+(defn run [iterations]
+  (loop [session initial-session
+         counter 0]
+    (if (= counter iterations)
+      session
+      (recur (tick session counter) (inc counter)))))
 
