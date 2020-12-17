@@ -457,13 +457,16 @@
              (nil? *session*))
       (let [;; reset state
             session (assoc session :then-queue #{} :then-finally-queue #{})
+            session (reduce
+                      (fn [session node-id]
+                        (update-in session [:beta-nodes node-id] assoc :trigger false))
+                      session
+                      (into then-finally-queue (map first then-queue)))
             ;; execute :then functions
             session (reduce
                       (fn [session [node-id id+attrs]]
-                        (let [node-path [:beta-nodes node-id]
-                              node (get-in session node-path)
-                              {:keys [matches then-fn]} node
-                              session (update-in session node-path assoc :trigger false)]
+                        (let [node (get-in session [:beta-nodes node-id])
+                              {:keys [matches then-fn]} node]
                           (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
                                 (when enabled
                                   (binding [*session* session
@@ -477,10 +480,8 @@
             ;; execute :then-finally functions
             session (reduce
                       (fn [session node-id]
-                        (let [node-path [:beta-nodes node-id]
-                              node (get-in session node-path)
-                              {:keys [then-finally-fn]} node
-                              session (update-in session node-path assoc :trigger false)]
+                        (let [node (get-in session [:beta-nodes node-id])
+                              {:keys [then-finally-fn]} node]
                           (binding [*session* session
                                     *mutable-session* (volatile! session)]
                             (then-finally-fn)
