@@ -121,29 +121,6 @@ As you can see, rules don't need a `:then` block if you're only using them to qu
 ;; => [{:x 20, :y 15}]
 ```
 
-You can also query from inside a rule with the special `*session*` dynamic var:
-
-```clj
-(def rules
-  (o/ruleset
-    {::get-player
-     [:what
-      [::player ::x x]
-      [::player ::y y]]
-
-     ::print-player-when-time-updates
-     [:what
-      [::time ::total tt]
-      :then
-      (println "Query from inside rule:" (o/query-all o/*session* ::get-player))]}))
-
-(reset! *session
-  (-> (reduce o/add-rule (o/->session) rules)
-      (o/insert ::player {::x 20 ::y 15}) ;; notice this short-hand way of inserting multiple things with the same id
-      (o/insert ::time ::total 100)
-      o/fire-rules))
-```
-
 ## Avoiding infinite loops
 
 Imagine you want to move the player's position based on its current position. So instead of just using the total time, maybe we want to add the delta time to the player's latest `::x` position:
@@ -176,8 +153,6 @@ Imagine you want to move the player's position based on its current position. So
 ```
 
 The `{:then false}` option tells O'Doyle to not run the `:then` block if that tuple is updated. If you don't include it, you'll get a StackOverflowException because the rule will cause itself to fire in an infinite loop. If all tuples in the `:what` block have `{:then false}`, it will never fire.
-
-Another way to avoid infinite loops is to not include the data you're modifying in your `:what` block at all. Instead, you could retrieve it by querying from your `:then` block with `(o/query-all o/*session* ::get-player)` and pulling out the data you want.
 
 ## Conditions
 
