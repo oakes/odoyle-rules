@@ -264,7 +264,7 @@
    (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
      (let [id+attr (get-id-attr alpha-fact)
            id+attrs (conj id+attrs id+attr)
-           new-token (assoc token :fact alpha-fact)
+           new-token (->Token alpha-fact (:kind token) nil)
            new? (not (contains? (:old-id-attrs join-node) id+attr))]
        (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
      session)))
