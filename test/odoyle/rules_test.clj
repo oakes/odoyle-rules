@@ -493,6 +493,32 @@
          (is (= 1 (count (o/query-all session ::rule1))))
          session))))
 
+;; this test exhibits a problem caused by
+;; disabling fast updates on facts whose value
+;; is part of a join
+#_
+(deftest infinite-loop-when-joining-value-with-id
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::left-of id {:then not=}]
+            [id ::color color {:then not=}]
+            [id ::height height {:then not=}]
+            :then
+            (o/insert! b ::left-of ::charlie)]}))
+      (o/insert ::bob ::left-of ::alice)
+      (o/insert ::alice ::color "blue")
+      (o/insert ::alice ::height 60)
+      (o/insert ::charlie ::color "green")
+      (o/insert ::charlie ::height 72)
+      o/fire-rules
+      ((fn [session]
+         (is (= ::charlie (-> (o/query-all session ::rule1)
+                              first
+                              :id)))
+         session))))
+
 (deftest multiple-joins
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
