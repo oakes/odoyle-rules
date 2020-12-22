@@ -1,19 +1,19 @@
 {:paths ["src"]
- :deps {expound {:mvn/version "0.7.2"}}
+ :deps {expound/expound {:mvn/version "0.7.2"}}
  :aliases {:dev {:extra-deps {org.clojure/clojurescript {:mvn/version "1.10.764"}
                               com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
                  :extra-paths ["dev-src"]
                  :main-opts ["dev.clj"]}
-           :docs {:extra-deps {dynadoc {:mvn/version "RELEASE"}
+           :docs {:extra-deps {dynadoc/dynadoc {:mvn/version "RELEASE"}
                                org.clojure/clojurescript {:mvn/version "1.10.764"}
                                com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
                   :extra-paths ["docs-src"]
                   :main-opts ["docs.clj"]}
-           :prod {:extra-deps {leiningen {:mvn/version "2.9.0"}}
+           :prod {:extra-deps {leiningen/leiningen {:mvn/version "2.9.0"}}
                   :main-opts ["prod.clj"]}
            :test {:extra-paths ["test"]
                   :main-opts ["test.clj"]}
            :bench {:extra-deps {net.sekao/clarax {:mvn/version "0.4.1"}
-                                datascript {:mvn/version "1.0.1"}}
+                                datascript/datascript {:mvn/version "1.0.1"}}
                    :extra-paths ["bench-src"]
                    :main-opts ["bench.clj"]}}}

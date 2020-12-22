@@ -400,9 +400,9 @@ should satisfy
 ## Development
 
 * Install [the Clojure CLI tool](https://clojure.org/guides/getting_started#_clojure_installer_and_cli_tools)
-* To run the examples in this README: `clj -A:dev`
-* To run the tests: `clj -A:test`
-* To install the release version: `clj -A:prod install`
+* To run the examples in this README: `clj -M:dev`
+* To run the tests: `clj -M:test`
+* To install the release version: `clj -M:prod install`
 
 ## Acknowledgements
 
