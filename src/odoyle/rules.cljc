@@ -608,7 +608,9 @@
   :args (s/and ::insert-args insert-conformer))
 
 (defn insert
-  "Inserts a fact into the session. Can optionally insert multiple facts with the same id."
+  "Inserts a fact into the session. Can optionally insert multiple facts with the same id.
+  
+  Note: if the given fact doesn't match at least one rule, it will be discarded."
   ([session [id attr value]]
    (insert session id attr value))
   ([session id attr->value]
