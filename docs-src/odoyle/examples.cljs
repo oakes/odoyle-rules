@@ -30,7 +30,7 @@
                            (insert 1 :todo/done false)
                            (insert 2 :todo/text "Buy groceries")
                            (insert 2 :todo/done false)
-                           (query-all ::get-todo))]}
+                           query-all)]}
    (let [session odoyle.examples/empty-session]
      focus)]
   [{:doc "Insert facts batched by id"
@@ -39,7 +39,7 @@
                                       :todo/done false})
                            (insert 2 {:todo/text "Buy groceries"
                                       :todo/done false})
-                           (query-all ::get-todo))]}
+                           query-all)]}
    (let [session odoyle.examples/empty-session]
      focus)])
 
