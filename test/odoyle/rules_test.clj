@@ -493,32 +493,6 @@
          (is (= 1 (count (o/query-all session ::rule1))))
          session))))
 
-;; this test exhibits a problem caused by
-;; disabling fast updates on facts whose value
-;; is part of a join
-#_
-(deftest infinite-loop-when-joining-value-with-id
-  (-> (reduce o/add-rule (o/->session)
-        (o/ruleset
-          {::rule1
-           [:what
-            [b ::left-of id {:then not=}]
-            [id ::color color {:then not=}]
-            [id ::height height {:then not=}]
-            :then
-            (o/insert! b ::left-of ::charlie)]}))
-      (o/insert ::bob ::left-of ::alice)
-      (o/insert ::alice ::color "blue")
-      (o/insert ::alice ::height 60)
-      (o/insert ::charlie ::color "green")
-      (o/insert ::charlie ::height 72)
-      o/fire-rules
-      ((fn [session]
-         (is (= ::charlie (-> (o/query-all session ::rule1)
-                              first
-                              :id)))
-         session))))
-
 (deftest multiple-joins
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
@@ -749,5 +723,32 @@
            (is (= [alice charlie] (:friends bob)))
            (is (= [] (mapv :id (:friends alice))))
            (is (= [alice] (:friends charlie))))
+         session))))
+
+;; normally, the {:then not=} would be enough to prevent an
+;; infinite loop here. but because the other facts are joined
+;; with the first one via `id`, they too will be updated when
+;; the ::left-of fact is updated. therefore, they must have
+;; {:then false} to prevent the infinite loop from happening.
+(deftest avoid-infinite-loop-when-updating-fact-whose-value-is-joined
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [b ::left-of id {:then not=}]
+            [id ::color color {:then false}]
+            [id ::height height {:then false}]
+            :then
+            (o/insert! b ::left-of ::charlie)]}))
+      (o/insert ::bob ::left-of ::alice)
+      (o/insert ::alice ::color "blue")
+      (o/insert ::alice ::height 60)
+      (o/insert ::charlie ::color "green")
+      (o/insert ::charlie ::height 72)
+      o/fire-rules
+      ((fn [session]
+         (is (= ::charlie (-> (o/query-all session ::rule1)
+                              first
+                              :id)))
          session))))
 
