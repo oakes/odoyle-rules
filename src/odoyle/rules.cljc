@@ -295,7 +295,7 @@
                        (nil? (:when-fn node))
                        ((:when-fn node) vars)))
         ;; the id+attr of this token is the last one in the vector
-        id+attr (last id+attrs)
+        id+attr (peek id+attrs)
         session (case (:kind token)
                   (:insert :update)
                   (as-> session $
