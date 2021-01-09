@@ -1,3 +1,5 @@
+(require '[clj-async-profiler.core :as prof])
+
 (defmulti task first)
 
 (defmethod task :default
@@ -16,6 +18,12 @@
   [_]
   (require '[dungeon-crawler.odoyle])
   (time ((resolve 'dungeon-crawler.odoyle/run) dungeon-iterations)))
+
+(defmethod task "dungeon-profile"
+  [_]
+  (require '[dungeon-crawler.odoyle])
+  (prof/profile ((resolve 'dungeon-crawler.odoyle/run) dungeon-iterations))
+  (prof/serve-files 8080))
 
 (defmethod task "dungeon-clara"
   [_]
