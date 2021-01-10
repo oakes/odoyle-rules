@@ -269,19 +269,19 @@
        (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
      session)))
 
-(defn- left-activate-memory-node [session node-id id+attrs vars token new?]
+(defn- left-activate-memory-node [session node-id id+attrs vars {:keys [kind] :as token} new?]
   (let [node-path [:beta-nodes node-id]
         node (get-in session node-path)
         ;; if this insert/update fact is new
         ;; and the condition doesn't have {:then false}
         ;; let the leaf node trigger
         session (if (and new?
-                         (#{:insert :update} (:kind token))
+                         (#{:insert :update} kind)
                          (if-let [[then-type then] (-> node :condition :opts :then)]
                            (case then-type
                              :bool then
-                             :func (if (:old-fact token)
-                                     (then (-> token :fact :value) (-> token :old-fact :value))
+                             :func (if-let [old-fact (:old-fact token)]
+                                     (then (-> token :fact :value) (:value old-fact))
                                      true))
                            true))
                   (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
@@ -296,7 +296,8 @@
                        ((:when-fn node) vars)))
         ;; the id+attr of this token is the last one in the vector
         id+attr (peek id+attrs)
-        session (case (:kind token)
+        ;; update session
+        session (case kind
                   (:insert :update)
                   (as-> session $
                         (update-in $ node-path assoc-in [:matches id+attrs]
@@ -322,29 +323,28 @@
       (left-activate-join-node session join-node-id id+attrs vars token)
       session)))
 
-(defn- right-activate-join-node [session node-id id+attr token]
-  (let [node (get-in session [:beta-nodes node-id])]
+(defn- right-activate-join-node [session node-id id+attr {:keys [fact] :as token}]
+  (let [{:keys [condition child-id id-key] :as node} (get-in session [:beta-nodes node-id])]
     (if-let [parent-id (:parent-id node)]
       (reduce-kv
         (fn [session id+attrs {existing-vars :vars}]
           ;; SHORTCUT: if we know the id, compare it with the token right away
-          (if (some->> node :id-key (get existing-vars) (not= (-> token :fact :id)))
+          (if (some->> id-key (get existing-vars) (not= (:id fact)))
             session
-            (if-let [vars (get-vars-from-fact existing-vars (:condition node) (:fact token))]
-              (left-activate-memory-node session (:child-id node) (conj id+attrs id+attr) vars token true)
+            (if-let [vars (get-vars-from-fact existing-vars condition fact)]
+              (left-activate-memory-node session child-id (conj id+attrs id+attr) vars token true)
               session)))
         session
         (get-in session [:beta-nodes parent-id :matches]))
       ;; root node
-      (if-let [vars (get-vars-from-fact {} (:condition node) (:fact token))]
-        (left-activate-memory-node session (:child-id node) [id+attr] vars token true)
+      (if-let [vars (get-vars-from-fact {} condition fact)]
+        (left-activate-memory-node session child-id [id+attr] vars token true)
         session))))
 
-(defn- right-activate-alpha-node [session node-path token]
-  (let [fact (:fact token)
-        [id attr :as id+attr] (get-id-attr fact)]
+(defn- right-activate-alpha-node [session node-path {:keys [fact kind old-fact] :as token}]
+  (let [[id attr :as id+attr] (get-id-attr fact)]
     (as-> session $
-          (case (:kind token)
+          (case kind
             :insert
             (-> $
                 (update-in node-path assoc-in [:facts id attr] fact)
@@ -367,16 +367,16 @@
             :update
             (-> $
                 (update-in node-path update-in [:facts id attr]
-                           (fn [old-fact]
-                             (assert (= (:old-fact token) old-fact))
+                           (fn [existing-old-fact]
+                             (assert (= old-fact existing-old-fact))
                              fact))))
           (reduce
             (fn [session child-id]
-              (if (and (= :update (:kind token))
+              (if (and (= :update kind)
                        (get-in session [:beta-nodes child-id :disable-fast-updates]))
                 (-> session
-                    (right-activate-join-node child-id id+attr (->Token (:old-fact token) :retract nil))
-                    (right-activate-join-node child-id id+attr (->Token (:fact token) :insert (:old-fact token))))
+                    (right-activate-join-node child-id id+attr (->Token old-fact :retract nil))
+                    (right-activate-join-node child-id id+attr (->Token fact :insert old-fact)))
                 (right-activate-join-node session child-id id+attr token)))
             $
             (:successors (get-in session node-path))))))
