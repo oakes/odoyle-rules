@@ -74,6 +74,8 @@
                      id-key ;; the name of the id binding if we know it
                      old-id-attrs ;; a set of id+attr so the node can keep track of which facts are "new"
                      disable-fast-updates ;; boolean indicating it isn't safe to do fast updates
+                     shared-node-ids ;; a set of JoinNode ids that are shared with this one
+                     shared ;; boolean indicating that this is a shared node
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
@@ -183,7 +185,9 @@
                                   :condition condition
                                   :id-key nil
                                   :old-id-attrs #{}
-                                  :disable-fast-updates false})
+                                  :disable-fast-updates false
+                                  :shared-node-ids #{}
+                                  :shared false})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
@@ -264,9 +268,14 @@
    (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
      (let [id+attr (get-id-attr alpha-fact)
            id+attrs (conj id+attrs id+attr)
-           new-token (->Token alpha-fact (:kind token) nil)
-           new? (not (contains? (:old-id-attrs join-node) id+attr))]
-       (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
+           new-token (->Token alpha-fact (:kind token) nil)]
+       (reduce
+         (fn [session join-node]
+           (let [new? (not (contains? (:old-id-attrs join-node) id+attr))]
+             (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?)))
+         session
+         (into [join-node]
+               (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node)))))
      session)))
 
 (defn- left-activate-memory-node [session node-id id+attrs vars {:keys [kind] :as token} new?]
@@ -323,23 +332,31 @@
       (left-activate-join-node session join-node-id id+attrs vars token)
       session)))
 
-(defn- right-activate-join-node [session node-id id+attr {:keys [fact] :as token}]
-  (let [{:keys [condition child-id id-key] :as node} (get-in session [:beta-nodes node-id])]
-    (if-let [parent-id (:parent-id node)]
-      (reduce-kv
-        (fn [session id+attrs {existing-vars :vars}]
-          ;; SHORTCUT: if we know the id, compare it with the token right away
-          (if (some->> id-key (get existing-vars) (not= (:id fact)))
-            session
-            (if-let [vars (get-vars-from-fact existing-vars condition fact)]
-              (left-activate-memory-node session child-id (conj id+attrs id+attr) vars token true)
-              session)))
-        session
-        (get-in session [:beta-nodes parent-id :matches]))
-      ;; root node
-      (if-let [vars (get-vars-from-fact {} condition fact)]
-        (left-activate-memory-node session child-id [id+attr] vars token true)
-        session))))
+(defn- right-activate-join-node
+  ([session node-id id+attr {:keys [fact] :as token}]
+   (let [{:keys [condition id-key] :as node} (get-in session [:beta-nodes node-id])]
+     (if-let [parent-id (:parent-id node)]
+       (reduce-kv
+         (fn [session id+attrs {existing-vars :vars}]
+           ;; SHORTCUT: if we know the id, compare it with the token right away
+           (if (some->> id-key (get existing-vars) (not= (:id fact)))
+             session
+             (if-let [vars (get-vars-from-fact existing-vars condition fact)]
+               (right-activate-join-node session node (conj id+attrs id+attr) vars token)
+               session)))
+         session
+         (get-in session [:beta-nodes parent-id :matches]))
+       ;; root node
+       (if-let [vars (get-vars-from-fact {} condition fact)]
+         (right-activate-join-node session node [id+attr] vars token)
+         session))))
+  ([session join-node id+attrs vars token]
+   (reduce
+     (fn [session join-node]
+       (left-activate-memory-node session (:child-id join-node) id+attrs vars token true))
+     session
+     (into [join-node]
+           (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))))))
 
 (defn- right-activate-alpha-node [session node-path {:keys [fact kind old-fact] :as token}]
   (let [[id attr :as id+attr] (get-id-attr fact)]
@@ -372,12 +389,19 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (if (and (= :update kind)
-                       (get-in session [:beta-nodes child-id :disable-fast-updates]))
-                (-> session
-                    (right-activate-join-node child-id id+attr (->Token old-fact :retract nil))
-                    (right-activate-join-node child-id id+attr (->Token fact :insert old-fact)))
-                (right-activate-join-node session child-id id+attr token)))
+              (let [node (get-in session [:beta-nodes child-id])]
+                (cond
+                  (:shared node)
+                  session
+
+                  (and (= :update kind)
+                       (:disable-fast-updates node))
+                  (-> session
+                      (right-activate-join-node child-id id+attr (->Token old-fact :retract nil))
+                      (right-activate-join-node child-id id+attr (->Token fact :insert old-fact)))
+
+                  :else
+                  (right-activate-join-node session child-id id+attr token))))
             $
             (:successors (get-in session node-path))))))
 
