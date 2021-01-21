@@ -15,18 +15,21 @@
 (s/def ::then (s/or :bool boolean? :func symbol?))
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
+(s/def ::rule-name qualified-keyword?)
+(s/def ::extends-block (s/cat :header #{:extends} :body ::rule-name))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
 (s/def ::when-block (s/cat :header #{:when} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-block (s/cat :header #{:then} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-finally-block (s/cat :header #{:then-finally} :body (s/+ #(not (keyword? %)))))
 
 (s/def ::rule (s/cat
+                :extends-block (s/? ::extends-block)
                 :what-block ::what-block
                 :when-block (s/? ::when-block)
                 :then-block (s/? ::then-block)
                 :then-finally-block (s/? ::then-finally-block)))
 
-(s/def ::rules (s/map-of qualified-keyword? ::rule))
+(s/def ::rules (s/map-of ::rule-name ::rule))
 
 (defn parse [spec content]
   (let [res (s/conform spec content)]
@@ -80,6 +83,8 @@
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
                       opts ;; map of options
+                      tuple ;; vector representing the condition's original form in the :what block
+                      shared-rule-name ;; name of rule this is shared with
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
@@ -106,14 +111,17 @@
                                                           :successors []
                                                           :facts {}}))))
 
-(defn- ->condition [{:keys [id attr value opts]}]
-  (-> {:bindings [] :nodes [] :opts opts}
+(defn- ->condition [{:keys [id attr value opts] :as parsed}]
+  (-> {:bindings [] :nodes [] :opts opts :tuple (->> parsed
+                                                     ((juxt :id :attr :value))
+                                                     (mapv second)
+                                                     (list 'quote))}
       (add-to-condition :id id)
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
 (defn ->rule [[rule-name rule]]
-  (let [{:keys [what-block when-block then-block then-finally-block]} rule
+  (let [{:keys [extends-block what-block when-block then-block then-finally-block]} rule
         conditions (mapv ->condition (:body what-block))
         when-body (:body when-block)
         when-body (if (> (count when-body) 1)
@@ -134,6 +142,7 @@
                   symbol)
      :conditions conditions
      :arg {:keys syms}
+     :extends (:body extends-block)
      :when-body when-body
      :then-body then-body
      :then-finally-body then-finally-body}))
@@ -565,18 +574,62 @@
 (defmacro ruleset
   "Returns a vector of rules after transforming the given map."
   [rules]
-  (reduce
-    (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
-      (conj v `(->Rule ~rule-name
-                       (mapv map->Condition ~conditions)
-                       ~(when (some? when-body) ;; need some? because it could be `false`
-                          `(fn ~fn-name [~arg] ~when-body))
-                       ~(when then-body
-                          `(fn ~fn-name [~arg] ~@then-body))
-                       ~(when then-finally-body
-                          `(fn ~fn-name [] ~@then-finally-body)))))
-    []
-    (mapv ->rule (parse ::rules rules))))
+  (->> (parse ::rules rules)
+       (mapv ->rule)
+       ;; for rules with :extends, update their :conditions
+       ;; so they point to the rule they are sharing with
+       ((fn [rules]
+          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)]
+            (reduce
+              (fn [v rule]
+                (if-let [parent-rule-name (:extends rule)]
+                  (->> (loop [hierarchy [(:rule-name rule)]
+                              parent-rule-name parent-rule-name
+                              conditions (:conditions rule)]
+                         (if-let [parent-rule (rule-name->rule parent-rule-name)]
+                           (let [next-hierarchy (conj hierarchy parent-rule-name)
+                                 parent-conditions (:conditions parent-rule)
+                                 next-conditions
+                                   (reduce-kv
+                                     (fn [conditions i condition]
+                                       (conj conditions
+                                         (if-let [parent-condition (get parent-conditions i)]
+                                           (let [rule-name (last hierarchy)
+                                                 ;; we must call `last` because we quoted it
+                                                 tuple (last (:tuple condition))
+                                                 parent-tuple (last (:tuple parent-condition))]
+                                             (when (not= tuple parent-tuple)
+                                               (throw (ex-info (str rule-name " cannot extend " parent-rule-name \newline
+                                                                    "because tuple #" (inc i) " in the :what block doesn't match:" \newline \newline
+                                                                    parent-tuple " is in " parent-rule-name \newline
+                                                                    tuple " is in " rule-name)
+                                                               {})))
+                                             (assoc condition :shared-rule-name (:rule-name parent-rule)))
+                                           condition)))
+                                     []
+                                     conditions)]
+                             (if (contains? (set hierarchy) parent-rule-name)
+                               (throw (ex-info (str "Circular dependency: " (str/join " -> " next-hierarchy)) {}))
+                               (if-let [next-rule-name (:extends parent-rule)]
+                                 (recur next-hierarchy next-rule-name next-conditions)
+                                 next-conditions)))
+                           (throw (ex-info (str "Cannot extend " parent-rule-name " because it isn't in the ruleset") {}))))
+                       (assoc rule :conditions)
+                       (conj v))
+                  (conj v rule)))
+              []
+              rules))))
+       (reduce
+         (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
+           (conj v `(->Rule ~rule-name
+                            (mapv map->Condition ~conditions)
+                            ~(when (some? when-body) ;; need some? because it could be `false`
+                               `(fn ~fn-name [~arg] ~when-body))
+                            ~(when then-body
+                               `(fn ~fn-name [~arg] ~@then-body))
+                            ~(when then-finally-body
+                               `(fn ~fn-name [] ~@then-finally-body)))))
+         [])))
 
 (defn ->session
   "Returns an empty session."
@@ -708,7 +761,7 @@
 
 (s/fdef query-all
   :args (s/cat :session ::session
-               :rule-name (s/? qualified-keyword?)))
+               :rule-name (s/? ::rule-name)))
 
 (defn query-all
   "When called with just a session, returns a vector of all inserted facts.
