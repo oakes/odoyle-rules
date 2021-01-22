@@ -84,6 +84,7 @@
                       opts ;; map of options
                       tuple ;; vector representing the condition's original form in the :what block
                       shared-rule-name ;; name of rule this is shared with
+                      shared-junction ;; boolean indicating if this is the junction point from the shared node
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
@@ -202,16 +203,18 @@
         ;; if the condition is shared, get the right shared node and update its :shared-node-ids
         ;; otherwise, add the join node to the alpha node's :successors
         session (if-let [shared-rule-name (:shared-rule-name condition)]
-                  (let [shared-node-id (or (get-in session [:root-node-ids shared-rule-name])
-                                           (throw (ex-info (str "Can't find rule " shared-rule-name) {})))
-                        shared-node-id (reduce
-                                         (fn [node-id _]
-                                           (let [node (get-in session [:beta-nodes node-id])
-                                                 mem-node (get-in session [:beta-nodes (:child-id node)])]
-                                             (:child-id mem-node)))
-                                         shared-node-id
-                                         (range 0 i))]
-                    (update-in session [:beta-nodes shared-node-id :shared-node-ids] conj join-node-id))
+                  (if-not (:shared-junction condition)
+                    session
+                    (let [shared-node-id (or (get-in session [:root-node-ids shared-rule-name])
+                                             (throw (ex-info (str "Can't find rule " shared-rule-name) {})))
+                          shared-node-id (reduce
+                                           (fn [node-id _]
+                                             (let [node (get-in session [:beta-nodes node-id])
+                                                   mem-node (get-in session [:beta-nodes (:child-id node)])]
+                                               (:child-id mem-node)))
+                                           shared-node-id
+                                           (range 0 i))]
+                      (update-in session [:beta-nodes shared-node-id :shared-node-ids] conj join-node-id)))
                   (let [successor-ids (conj (:successors (get-in session alpha-node-path))
                                             join-node-id)
                         ;; successors must be sorted by ancestry (descendents first) to avoid duplicate rule firings
@@ -612,7 +615,9 @@
                                                                     parent-tuple " is in " parent-rule-name \newline
                                                                     tuple " is in " rule-name)
                                                                {})))
-                                             (assoc condition :shared-rule-name (:rule-name parent-rule)))
+                                             (assoc condition
+                                                    :shared-rule-name (:rule-name parent-rule)
+                                                    :shared-junction (= i (dec (count parent-conditions)))))
                                            condition)))
                                      []
                                      conditions)]
