@@ -619,6 +619,13 @@
                   (conj v rule)))
               []
               rules))))
+       ;; sort so that rules come after the rules they extend
+       (sort (fn [a b]
+               (cond
+                 (= (:extends a) (:rule-name b)) 1
+                 (= (:extends b) (:rule-name a)) -1
+                 :else 0)))
+       ;; return a vector of Rule constructors
        (reduce
          (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
            (conj v `(->Rule ~rule-name

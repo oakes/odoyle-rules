@@ -755,20 +755,20 @@
 (deftest extends
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
-          {::person
-           [:what
-            [id ::color color]]
+          {::person-with-left-of
+           [:extends ::person-with-height
+            :what
+            [id ::color color]
+            [id ::height height]
+            [id ::left-of left-of]]
            ::person-with-height
            [:extends ::person
             :what
             [id ::color color]
             [id ::height height]]
-           ::person-with-left-of
-           [:extends ::person-with-height
-            :what
-            [id ::color color]
-            [id ::height height]
-            [id ::left-of left-of]]}))
+           ::person
+           [:what
+            [id ::color color]]}))
       (o/insert ::alice ::color "blue")
       (o/insert ::alice ::height 60)
       (o/insert ::alice ::left-of ::bob)
