@@ -295,8 +295,8 @@
            (let [new? (not (contains? (:old-id-attrs join-node) id+attr))]
              (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?)))
          session
-         (into [join-node]
-               (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node)))))
+         (conj (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))
+               join-node)))
      session)))
 
 (defn- left-activate-memory-node [session node-id id+attrs vars {:keys [kind] :as token} new?]
@@ -376,8 +376,8 @@
      (fn [session join-node]
        (left-activate-memory-node session (:child-id join-node) id+attrs vars token true))
      session
-     (into [join-node]
-           (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))))))
+     (conj (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))
+           join-node))))
 
 (defn- right-activate-alpha-node [session node-path {:keys [fact kind old-fact] :as token}]
   (let [[id attr :as id+attr] (get-id-attr fact)]
