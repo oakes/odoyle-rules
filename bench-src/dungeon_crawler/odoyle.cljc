@@ -15,7 +15,7 @@
       [id ::e/y-velocity y-velocity]]
      
      ::move-enemy
-     [:extends ::entity
+     [:with ::entity
       :what
       [id ::e/kind kind]
       [id ::e/health health]

@@ -752,17 +752,17 @@
                               :id)))
          session))))
 
-(deftest extends
+(deftest with
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
           {::person-with-left-of
-           [:extends ::person-with-height
+           [:with ::person-with-height
             :what
             [id ::color color]
             [id ::height height]
             [id ::left-of left-of]]
            ::person-with-height
-           [:extends ::person
+           [:with ::person
             :what
             [id ::color color]
             [id ::height height]]

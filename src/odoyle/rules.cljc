@@ -16,14 +16,14 @@
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
 (s/def ::rule-name qualified-keyword?)
-(s/def ::extends-block (s/cat :header #{:extends} :body ::rule-name))
+(s/def ::with-block (s/cat :header #{:with} :body ::rule-name))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
 (s/def ::when-block (s/cat :header #{:when} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-block (s/cat :header #{:then} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-finally-block (s/cat :header #{:then-finally} :body (s/+ #(not (keyword? %)))))
 
 (s/def ::rule (s/cat
-                :extends-block (s/? ::extends-block)
+                :with-block (s/? ::with-block)
                 :what-block ::what-block
                 :when-block (s/? ::when-block)
                 :then-block (s/? ::then-block)
@@ -122,7 +122,7 @@
       (add-to-condition :value value)))
 
 (defn ->rule [[rule-name rule]]
-  (let [{:keys [extends-block what-block when-block then-block then-finally-block]} rule
+  (let [{:keys [with-block what-block when-block then-block then-finally-block]} rule
         conditions (mapv ->condition (:body what-block))
         when-body (:body when-block)
         when-body (if (> (count when-body) 1)
@@ -143,7 +143,7 @@
                   symbol)
      :conditions conditions
      :arg {:keys syms}
-     :extends (:body extends-block)
+     :with (:body with-block)
      :when-body when-body
      :then-body then-body
      :then-finally-body then-finally-body}))
@@ -476,13 +476,13 @@
 
 (defn- prep-rules-for-node-sharing [rules]
   (->> rules
-       ;; for rules with :extends, update their :conditions
+       ;; for rules using :with, update their :conditions
        ;; so they point to the rule they are sharing with
        ((fn [rules]
           (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)]
             (reduce
               (fn [v rule]
-                (if-let [parent-rule-name (:extends rule)]
+                (if-let [parent-rule-name (:with rule)]
                   (->> (loop [hierarchy [(:rule-name rule)]
                               parent-rule-name parent-rule-name
                               conditions (:conditions rule)]
@@ -499,7 +499,7 @@
                                                  tuple (last (:tuple condition))
                                                  parent-tuple (last (:tuple parent-condition))]
                                              (when (not= tuple parent-tuple)
-                                               (throw (ex-info (str rule-name " cannot extend " parent-rule-name \newline
+                                               (throw (ex-info (str rule-name " cannot be defined :with " parent-rule-name \newline
                                                                     "because tuple #" (inc i) " in the :what block doesn't match:" \newline \newline
                                                                     parent-tuple " is in " parent-rule-name \newline
                                                                     tuple " is in " rule-name)
@@ -512,7 +512,7 @@
                                      conditions)]
                              (if (contains? (set hierarchy) parent-rule-name)
                                (throw (ex-info (str "Circular dependency: " (str/join " -> " next-hierarchy)) {}))
-                               (if-let [next-rule-name (:extends parent-rule)]
+                               (if-let [next-rule-name (:with parent-rule)]
                                  (recur next-hierarchy next-rule-name next-conditions)
                                  {:parents (set (drop 1 next-hierarchy))
                                   :conditions next-conditions})))
