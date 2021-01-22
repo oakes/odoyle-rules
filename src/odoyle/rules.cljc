@@ -474,6 +474,69 @@
         session
         node-paths))))
 
+(defn- prep-rules-for-node-sharing [rules]
+  (->> rules
+       ;; for rules with :extends, update their :conditions
+       ;; so they point to the rule they are sharing with
+       ((fn [rules]
+          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)]
+            (reduce
+              (fn [v rule]
+                (if-let [parent-rule-name (:extends rule)]
+                  (->> (loop [hierarchy [(:rule-name rule)]
+                              parent-rule-name parent-rule-name
+                              conditions (:conditions rule)]
+                         (if-let [parent-rule (rule-name->rule parent-rule-name)]
+                           (let [next-hierarchy (conj hierarchy parent-rule-name)
+                                 parent-conditions (:conditions parent-rule)
+                                 next-conditions
+                                   (reduce-kv
+                                     (fn [conditions i condition]
+                                       (conj conditions
+                                         (if-let [parent-condition (get parent-conditions i)]
+                                           (let [rule-name (last hierarchy)
+                                                 ;; we must call `last` because we quoted it
+                                                 tuple (last (:tuple condition))
+                                                 parent-tuple (last (:tuple parent-condition))]
+                                             (when (not= tuple parent-tuple)
+                                               (throw (ex-info (str rule-name " cannot extend " parent-rule-name \newline
+                                                                    "because tuple #" (inc i) " in the :what block doesn't match:" \newline \newline
+                                                                    parent-tuple " is in " parent-rule-name \newline
+                                                                    tuple " is in " rule-name)
+                                                               {})))
+                                             (assoc condition
+                                                    :shared-rule-name (:rule-name parent-rule)
+                                                    :shared-junction (= i (dec (count parent-conditions)))))
+                                           condition)))
+                                     []
+                                     conditions)]
+                             (if (contains? (set hierarchy) parent-rule-name)
+                               (throw (ex-info (str "Circular dependency: " (str/join " -> " next-hierarchy)) {}))
+                               (if-let [next-rule-name (:extends parent-rule)]
+                                 (recur next-hierarchy next-rule-name next-conditions)
+                                 {:parents (set (drop 1 next-hierarchy))
+                                  :conditions next-conditions})))
+                           (throw (ex-info (str "Cannot extend " parent-rule-name " because it isn't in the ruleset") {}))))
+                       (merge rule)
+                       (conj v))
+                  (conj v rule)))
+              []
+              rules))))
+       ;; make sure rules come after the rules they extend via topological sorting
+       ((fn [rules]
+          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)
+                rule-name->parents (reduce #(assoc %1 (:rule-name %2) (:parents %2)) {} rules)
+                depth (fn depth [x]
+                        (if (empty? (rule-name->parents x))
+                          0
+                          (->> x rule-name->parents (map depth) (apply max) inc)))
+                ordered-rules (->> (keys rule-name->parents)
+                                   (group-by depth)
+                                   (sort-by key)
+                                   (map val)
+                                   (mapcat identity))]
+            (mapv rule-name->rule ordered-rules))))))
+
 (def ^:private ^:dynamic *mutable-session* nil)
 
 ;; public
@@ -587,66 +650,7 @@
   [rules]
   (->> (parse ::rules rules)
        (mapv ->rule)
-       ;; for rules with :extends, update their :conditions
-       ;; so they point to the rule they are sharing with
-       ((fn [rules]
-          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)]
-            (reduce
-              (fn [v rule]
-                (if-let [parent-rule-name (:extends rule)]
-                  (->> (loop [hierarchy [(:rule-name rule)]
-                              parent-rule-name parent-rule-name
-                              conditions (:conditions rule)]
-                         (if-let [parent-rule (rule-name->rule parent-rule-name)]
-                           (let [next-hierarchy (conj hierarchy parent-rule-name)
-                                 parent-conditions (:conditions parent-rule)
-                                 next-conditions
-                                   (reduce-kv
-                                     (fn [conditions i condition]
-                                       (conj conditions
-                                         (if-let [parent-condition (get parent-conditions i)]
-                                           (let [rule-name (last hierarchy)
-                                                 ;; we must call `last` because we quoted it
-                                                 tuple (last (:tuple condition))
-                                                 parent-tuple (last (:tuple parent-condition))]
-                                             (when (not= tuple parent-tuple)
-                                               (throw (ex-info (str rule-name " cannot extend " parent-rule-name \newline
-                                                                    "because tuple #" (inc i) " in the :what block doesn't match:" \newline \newline
-                                                                    parent-tuple " is in " parent-rule-name \newline
-                                                                    tuple " is in " rule-name)
-                                                               {})))
-                                             (assoc condition
-                                                    :shared-rule-name (:rule-name parent-rule)
-                                                    :shared-junction (= i (dec (count parent-conditions)))))
-                                           condition)))
-                                     []
-                                     conditions)]
-                             (if (contains? (set hierarchy) parent-rule-name)
-                               (throw (ex-info (str "Circular dependency: " (str/join " -> " next-hierarchy)) {}))
-                               (if-let [next-rule-name (:extends parent-rule)]
-                                 (recur next-hierarchy next-rule-name next-conditions)
-                                 {:parents (set (drop 1 next-hierarchy))
-                                  :conditions next-conditions})))
-                           (throw (ex-info (str "Cannot extend " parent-rule-name " because it isn't in the ruleset") {}))))
-                       (merge rule)
-                       (conj v))
-                  (conj v rule)))
-              []
-              rules))))
-       ;; make sure rules come after the rules they extend via topological sorting
-       ((fn [rules]
-          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)
-                rule-name->parents (reduce #(assoc %1 (:rule-name %2) (:parents %2)) {} rules)
-                depth (fn depth [x]
-                        (if (empty? (rule-name->parents x))
-                          0
-                          (->> x rule-name->parents (map depth) (apply max) inc)))
-                ordered-rules (->> (keys rule-name->parents)
-                                   (group-by depth)
-                                   (sort-by key)
-                                   (map val)
-                                   (mapcat identity))]
-            (mapv rule-name->rule ordered-rules))))
+       prep-rules-for-node-sharing
        ;; return a vector of Rule constructors
        (reduce
          (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
