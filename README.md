@@ -30,7 +30,7 @@ Advantages compared to Clara:
 Disadvantages compared to Clara:
 
 * Clara supports [truth maintenance](https://www.clara-rules.org/docs/truthmaint/), which can be a very useful feature in some domains.
-* Clara is faster. I'm still working through the '95 Doorenbos paper so my optimizations aren't even in this century yet.
+* Clara may be faster (but check out the "Performance" section below).
 
 The design of O'Doyle is almost a carbon copy of my Nim rules engine, [pararules](https://github.com/paranim/pararules).
 
@@ -218,7 +218,7 @@ You can add as many conditions as you want, and they will implicitly work as if 
 
 Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
 
-## Joins and advanced queries
+## Joins
 
 Instead of the `::player` rule, we could make a more generic "getter" rule that works for any id:
 
@@ -358,6 +358,61 @@ Later on, we can read the facts and insert them into a new session:
     (o/fire-rules
       (reduce o/insert session facts))))
 ```
+
+## Performance
+
+In any non-trivial project, you'll end up with a lot of rules that share some common tuples in their `:what` blocks, like this:
+
+```clojure
+(def rules
+  (o/ruleset
+    {::character
+     [:what
+      [id ::x x]
+      [id ::y y]]
+
+      ::move-character
+      [:what
+       [::time ::delta dt]
+       [id ::x x {:then false}]
+       [id ::y y {:then false}]
+       :then
+       (-> o/*session*
+           (o/insert id {::x (+ x dt) ::y (+ y dt)})
+           o/reset!)]}))
+```
+
+Here we have a `::character` rule whose only purpose is for queries, and a `::move-character` rule that modifies it when the timestamp is updated. In both cases, there is a join on the `id` binding. Joins are not free -- they have a runtime cost, and in this case, that cost is paid twice.
+
+In theory, this could be solved using a common optimization in rules engines calling node sharing. However, node sharing adds a lot of complexity to the codebase, and if it is automatic, it can be easily lost when subtle changes are made to a rule -- a regression that isn't easy to notice.
+
+It turns out that a feature we've already discussed can solve this: derived facts. The above example can be rewritten like this:
+
+```clojure
+(def rules
+  (o/ruleset
+    {::character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then
+      (-> o/*session*
+          (o/insert id ::character o/*match*)
+          o/reset!)]
+
+      ::move-character
+      [:what
+       [::time ::delta dt]
+       [id ::character ch {:then false}]
+       :then
+       (-> o/*session*
+           (o/insert id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})
+           o/reset!)]}))
+```
+
+With `o/*match*` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.
+
+This will be faster because we now are only doing the join once, and all subsequent rules are just using the derived fact. As the number of joined tuples gets larger, the performance difference gets more and more substantial.
 
 ## Spec integration
 

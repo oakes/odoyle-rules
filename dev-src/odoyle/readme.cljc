@@ -238,3 +238,34 @@
           o/fire-rules)))
   ;; print spec error but don't stop execution
   #?(:clj (try (catch Exception e (println (.getMessage e))))))
+
+;; example 11
+
+(def rules-11
+  (o/ruleset
+    {::character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then
+      (-> o/*session*
+          (o/insert id ::character o/*match*)
+          o/reset!)]
+
+      ::move-character
+      [:what
+       [::time ::delta dt]
+       [id ::character ch {:then false}]
+       :then
+       (-> o/*session*
+           (o/insert id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})
+           o/reset!)]}))
+
+(reset! *session
+  (-> (reduce o/add-rule (o/->session) rules-11)
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::enemy {::x 5 ::y 5})
+      (o/insert ::time ::delta 0.1)
+      o/fire-rules))
+
+(println (o/query-all @*session ::character))
