@@ -457,6 +457,7 @@ should satisfy
 * Install [the Clojure CLI tool](https://clojure.org/guides/getting_started#_clojure_installer_and_cli_tools)
 * To run the examples in this README: `clj -M:dev`
 * To run the tests: `clj -M:test`
+* To run a benchmark: `clj -M:bench dungeon`
 * To install the release version: `clj -M:prod install`
 
 ## Acknowledgements
