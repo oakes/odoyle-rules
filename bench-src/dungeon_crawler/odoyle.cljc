@@ -5,7 +5,7 @@
 
 (def rules
   (o/ruleset
-    {::get-entity
+    {::entity
      [:what
       [id ::e/kind kind]
       [id ::e/x x]
@@ -14,48 +14,43 @@
       [id ::e/y-change y-change]
       [id ::e/x-velocity x-velocity]
       [id ::e/y-velocity y-velocity]
-      [id ::e/width width]
-      [id ::e/height height]]
+      [id ::e/health health]
+      :then
+      ;; create a derived "all" fact that contains
+      ;; all the fields above in a single map
+      (-> o/*session*
+          ;; give the player's "all" fact a unique id
+          ;; so it can be easily distinguished when
+          ;; pulled into other rules
+          (o/insert (if (= kind :player) ::player id)
+                    ::all
+                    o/*match*)
+          o/reset!)]
      
      ::move-enemy
      [:what
       [::time ::total total-time]
-      [pid ::e/kind :player]
-      [pid ::e/health player-health]
-      [pid ::e/x player-x]
-      [pid ::e/y player-y]
-      [pid ::e/x-velocity player-x-velocity]
-      [pid ::e/y-velocity player-y-velocity]
-      [eid ::e/kind enemy-kind]
-      [eid ::e/health enemy-health]
-      [eid ::e/x enemy-x {:then false}]
-      [eid ::e/y enemy-y {:then false}]
-      [eid ::e/x-velocity enemy-x-velocity {:then false}]
-      [eid ::e/y-velocity enemy-y-velocity {:then false}]
+      [::player ::all player {:then false}]
+      [eid ::all enemy {:then false}]
       [eid ::distance-from-player distance-from-player {:then false}]
       :when
-      (not= enemy-kind :player)
-      (> enemy-health 0)
+      (not= eid ::player)
+      (> (:health enemy) 0)
       :then
-      (let [enemy {:x enemy-x :y enemy-y :x-velocity enemy-x-velocity :y-velocity enemy-y-velocity}
-            player {:x player-x :y player-y :x-velocity player-x-velocity :y-velocity player-y-velocity}
-            [xv yv] (move/get-enemy-velocity enemy player player-health distance-from-player)]
-        (->> (move/move enemy-x enemy-y xv yv 0.1 true)
+      (let [[xv yv] (move/get-enemy-velocity enemy player distance-from-player)]
+        (->> (move/move (:x enemy) (:y enemy) xv yv 0.1 true)
              (o/insert o/*session* eid)
              o/reset!))]
 
      ::update-distance-from-player
      [:what
-      [pid ::e/kind :player]
-      [pid ::e/x player-x]
-      [pid ::e/y player-y]
-      [eid ::e/x enemy-x]
-      [eid ::e/y enemy-y]
+      [::player ::all player]
+      [eid ::all enemy]
       :when
-      (not= eid pid)
+      (not= eid ::player)
       :then
       (-> o/*session*
-          (o/insert eid ::distance-from-player (move/calc-distance player-x player-y enemy-x enemy-y))
+          (o/insert eid ::distance-from-player (move/calc-distance (:x player) (:y player) (:x enemy) (:y enemy)))
           o/reset!)]}))
 
 (defn init [session]

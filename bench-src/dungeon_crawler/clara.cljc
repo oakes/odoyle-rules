@@ -82,7 +82,7 @@
                         (> (:value enemy-health) 0))
              distance-from-player DistanceFromPlayer
              :when (= (:id enemy) (:id distance-from-player))]
-         (let [[xv yv] (move/get-enemy-velocity enemy player (:value player-health) (:value distance-from-player))]
+         (let [[xv yv] (move/get-enemy-velocity enemy (assoc player :health (:value player-health)) (:value distance-from-player))]
            (clara/retract! enemy)
            (->> (move/move (:x enemy) (:y enemy) xv yv 0.1 false)
                 (merge enemy {:game-anchor game})
