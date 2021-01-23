@@ -101,7 +101,7 @@ Updating the player's `::x` attribute isn't useful unless we can get the value e
           (o/insert ::player ::x tt)
           o/reset!)]
 
-     ::get-player
+     ::player
      [:what
       [::player ::x x]
       [::player ::y y]]}))
@@ -117,7 +117,7 @@ As you can see, rules don't need a `:then` block if you're only using them to qu
         (o/insert ::player ::y 15)
         o/fire-rules)))
 
-(println (o/query-all @*session ::get-player))
+(println (o/query-all @*session ::player))
 ;; => [{:x 20, :y 15}]
 ```
 
@@ -128,7 +128,7 @@ Imagine you want to move the player's position based on its current position. So
 ```clj
 (def rules
   (o/ruleset
-    {::get-player
+    {::player
      [:what
       [::player ::x x]
       [::player ::y y]]
@@ -148,7 +148,7 @@ Imagine you want to move the player's position based on its current position. So
       (o/insert ::time {::total 100 ::delta 0.1})
       o/fire-rules))
 
-(println (o/query-all @*session ::get-player))
+(println (o/query-all @*session ::player))
 ;; => [{:x 20.1, :y 15}]
 ```
 
@@ -220,10 +220,10 @@ Using a `:when` block is better because it also affects the results of `query-al
 
 ## Joins and advanced queries
 
-Instead of the `::get-player` rule, we could make a more generic "getter" rule that works for any id:
+Instead of the `::player` rule, we could make a more generic "getter" rule that works for any id:
 
 ```clj
-::get-character
+::character
 [:what
  [id ::x x]
  [id ::y y]]
@@ -240,7 +240,7 @@ Now we can add multiple things with those two attributes and get them back in a 
       (o/insert ::enemy {::x 5 ::y 5})
       o/fire-rules))
 
-(println (o/query-all @*session ::get-character))
+(println (o/query-all @*session ::character))
 ;; => [{:id :odoyle.readme/player, :x 20, :y 15} {:id :odoyle.readme/enemy, :x 5, :y 5}]
 ```
 
@@ -257,7 +257,7 @@ So far our ids have been keywords like `::player`, but you can use anything as a
               session
               (range 5)))))
 
-(println (o/query-all @*session ::get-character))
+(println (o/query-all @*session ::character))
 ;; => [{:id 0, :x 14, :y 45} {:id 1, :x 12, :y 48} {:id 2, :x 48, :y 25} {:id 3, :x 4, :y 25} {:id 4, :x 39, :y 0}]
 ```
 
@@ -265,17 +265,17 @@ So far our ids have been keywords like `::player`, but you can use anything as a
 
 Sometimes we want to make a rule that receives a *collection* of facts. In Clara, this is done with [accumulators](https://www.clara-rules.org/docs/accumulators/). In O'Doyle, this is done by creating facts that are derived from other facts.
 
-If you want to create a fact that contains all characters, one clever way to do it is to run a query in the `::get-character` rule, and insert the result as a new fact:
+If you want to create a fact that contains all characters, one clever way to do it is to run a query in the `::character` rule, and insert the result as a new fact:
 
 ```clj
 (def rules
   (o/ruleset
-    {::get-character
+    {::character
      [:what
       [id ::x x]
       [id ::y y]
       :then
-      (->> (o/query-all o/*session* ::get-character)
+      (->> (o/query-all o/*session* ::character)
            (o/insert o/*session* ::derived ::all-characters)
            o/reset!)]
 
@@ -315,12 +315,12 @@ It didn't print, which means the `::all-characters` fact hasn't been updated! Th
 The solution is to use `:then-finally`:
 
 ```clj
-::get-character
+::character
 [:what
  [id ::x x]
  [id ::y y]
  :then-finally
- (->> (o/query-all o/*session* ::get-character)
+ (->> (o/query-all o/*session* ::character)
       (o/insert o/*session* ::derived ::all-characters)
       o/reset!)]
 ```

@@ -47,7 +47,7 @@
 
 (def rules-3
   (o/ruleset
-    {::get-player
+    {::player
      [:what
       [::player ::x x]
       [::player ::y y]]
@@ -55,7 +55,7 @@
      [:what
       [::time ::total tt]
       :then
-      (println "Query from inside rule:" (o/query-all o/*session* ::get-player))]}))
+      (println "Query from inside rule:" (o/query-all o/*session* ::player))]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-3)
@@ -63,13 +63,13 @@
       (o/insert ::time ::total 100)
       o/fire-rules))
 
-(println (o/query-all @*session ::get-player))
+(println (o/query-all @*session ::player))
 
 ;; example 4
 
 (def rules-4
   (o/ruleset
-    {::get-player
+    {::player
      [:what
       [::player ::x x]
       [::player ::y y]]
@@ -88,7 +88,7 @@
       (o/insert ::time {::total 100 ::delta 0.1})
       o/fire-rules))
 
-(println (o/query-all @*session ::get-player))
+(println (o/query-all @*session ::player))
 
 ;; example 5
 
@@ -101,7 +101,7 @@
 
 (def rules-5
   (o/ruleset
-    {::get-player
+    {::player
      [:what
       [::player ::x x]
       [::player ::y y]]
@@ -123,13 +123,13 @@
 
 (on-window-resize 800 600)
 
-(println (o/query-all @*session ::get-player))
+(println (o/query-all @*session ::player))
 
 ;; example 6
 
 (def rules-6
   (o/ruleset
-    {::get-character
+    {::character
      [:what
       [id ::x x]
       [id ::y y]]}))
@@ -140,7 +140,7 @@
       (o/insert ::enemy {::x 5 ::y 5})
       o/fire-rules))
 
-(println (o/query-all @*session ::get-character))
+(println (o/query-all @*session ::character))
 
 ;; example 7
 
@@ -154,7 +154,7 @@
               session
               (range 5)))))
 
-(println (o/query-all @*session ::get-character))
+(println (o/query-all @*session ::character))
 
 ;; example 8
 
@@ -176,12 +176,12 @@
 
 (test-derived-fact!
   (o/ruleset
-    {::get-character
+    {::character
      [:what
       [id ::x x]
       [id ::y y]
       :then
-      (->> (o/query-all o/*session* ::get-character)
+      (->> (o/query-all o/*session* ::character)
            (o/insert o/*session* ::derived ::all-characters)
            o/reset!)]
 
@@ -193,12 +193,12 @@
 
 (test-derived-fact!
   (o/ruleset
-    {::get-character
+    {::character
      [:what
       [id ::x x]
       [id ::y y]
       :then-finally
-      (->> (o/query-all o/*session* ::get-character)
+      (->> (o/query-all o/*session* ::character)
            (o/insert o/*session* ::derived ::all-characters)
            o/reset!)]
 
