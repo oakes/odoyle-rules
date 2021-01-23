@@ -13,7 +13,21 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
   * [Dungeon Crawler](https://github.com/oakes/play-cljc-examples/tree/master/dungeon-crawler), a game (see [this file](https://github.com/oakes/play-cljc-examples/blob/master/dungeon-crawler/src/dungeon_crawler/session.cljc))
   * [Paravim](https://github.com/oakes/Paravim), a text editor (see [this file](https://github.com/oakes/Paravim/blob/master/src/paravim/session.cljc))
   * [O'Doyle Rum](https://github.com/oakes/odoyle-rum), a library for making web UIs with O'Doyle
-* Read the tutorial below
+* Read the tutorial below:
+  - [Comparison to Clara](#comparison-to-clara)
+  - [Your first rule](#your-first-rule)
+  - [Updating the session from inside a rule](#updating-the-session-from-inside-a-rule)
+  - [Queries](#queries)
+  - [Avoiding infinite loops](#avoiding-infinite-loops)
+  - [Conditions](#conditions)
+  - [Joins](#joins)
+  - [Generating ids](#generating-ids)
+  - [Derived facts](#derived-facts)
+  - [Serializing a session](#serializing-a-session)
+  - [Performance](#performance)
+  - [Spec integration](#spec-integration)
+  - [Development](#development)
+  - [Acknowledgements](#acknowledgements)
 
 ## Comparison to Clara
 
