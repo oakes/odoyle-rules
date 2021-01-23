@@ -752,35 +752,3 @@
                               :id)))
          session))))
 
-(deftest with
-  (-> (reduce o/add-rule (o/->session)
-        (o/ruleset
-          {::person-with-left-of
-           [:with ::person-with-height
-            :what
-            [id ::color color]
-            [id ::height height]
-            [id ::left-of left-of]]
-           ::person-with-height
-           [:with ::person
-            :what
-            [id ::color color]
-            [id ::height height]]
-           ::person
-           [:what
-            [id ::color color]]}))
-      (o/insert ::alice ::color "blue")
-      (o/insert ::alice ::height 60)
-      (o/insert ::alice ::left-of ::bob)
-      (o/insert ::bob ::color "red")
-      (o/insert ::bob ::height 70)
-      (o/insert ::bob ::left-of ::charlie)
-      ((fn [session]
-         (is (= [{:id ::alice, :color "blue", :height 60}
-                 {:id ::bob, :color "red", :height 70}]
-                (o/query-all session ::person-with-height)))
-         (is (= [{:id ::alice, :color "blue", :height 60, :left-of ::bob}
-                 {:id ::bob, :color "red", :height 70, :left-of ::charlie}]
-                (o/query-all session ::person-with-left-of)))
-         session))))
-

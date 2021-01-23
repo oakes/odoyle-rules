@@ -5,41 +5,43 @@
 
 (def rules
   (o/ruleset
-    {::entity
+    {::get-entity
      [:what
       [id ::e/kind kind]
-      [id ::e/health health]
       [id ::e/x x]
       [id ::e/y y]
+      [id ::e/x-change x-change]
+      [id ::e/y-change y-change]
       [id ::e/x-velocity x-velocity]
-      [id ::e/y-velocity y-velocity]]
+      [id ::e/y-velocity y-velocity]
+      [id ::e/width width]
+      [id ::e/height height]]
      
      ::move-enemy
-     [:with ::entity
-      :what
-      [id ::e/kind kind]
-      [id ::e/health health]
-      [id ::e/x x {:then false}]
-      [id ::e/y y {:then false}]
-      [id ::e/x-velocity x-velocity {:then false}]
-      [id ::e/y-velocity y-velocity {:then false}]
-      [id ::distance-from-player distance-from-player {:then false}]
+     [:what
+      [::time ::total total-time]
       [pid ::e/kind :player]
       [pid ::e/health player-health]
       [pid ::e/x player-x]
       [pid ::e/y player-y]
       [pid ::e/x-velocity player-x-velocity]
       [pid ::e/y-velocity player-y-velocity]
-      [::time ::total total-time]
+      [eid ::e/kind enemy-kind]
+      [eid ::e/health enemy-health]
+      [eid ::e/x enemy-x {:then false}]
+      [eid ::e/y enemy-y {:then false}]
+      [eid ::e/x-velocity enemy-x-velocity {:then false}]
+      [eid ::e/y-velocity enemy-y-velocity {:then false}]
+      [eid ::distance-from-player distance-from-player {:then false}]
       :when
-      (not= id pid)
-      (> health 0)
+      (not= enemy-kind :player)
+      (> enemy-health 0)
       :then
-      (let [enemy {:x x :y y :x-velocity x-velocity :y-velocity y-velocity}
+      (let [enemy {:x enemy-x :y enemy-y :x-velocity enemy-x-velocity :y-velocity enemy-y-velocity}
             player {:x player-x :y player-y :x-velocity player-x-velocity :y-velocity player-y-velocity}
             [xv yv] (move/get-enemy-velocity enemy player player-health distance-from-player)]
-        (->> (move/move x y xv yv 0.1 true)
-             (o/insert o/*session* id)
+        (->> (move/move enemy-x enemy-y xv yv 0.1 true)
+             (o/insert o/*session* eid)
              o/reset!))]
 
      ::update-distance-from-player

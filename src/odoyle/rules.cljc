@@ -15,21 +15,18 @@
 (s/def ::then (s/or :bool boolean? :func symbol?))
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
-(s/def ::rule-name qualified-keyword?)
-(s/def ::with-block (s/cat :header #{:with} :body ::rule-name))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
 (s/def ::when-block (s/cat :header #{:when} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-block (s/cat :header #{:then} :body (s/+ #(not (keyword? %)))))
 (s/def ::then-finally-block (s/cat :header #{:then-finally} :body (s/+ #(not (keyword? %)))))
 
 (s/def ::rule (s/cat
-                :with-block (s/? ::with-block)
                 :what-block ::what-block
                 :when-block (s/? ::when-block)
                 :then-block (s/? ::then-block)
                 :then-finally-block (s/? ::then-finally-block)))
 
-(s/def ::rules (s/map-of ::rule-name ::rule))
+(s/def ::rules (s/map-of qualified-keyword? ::rule))
 
 (defn parse [spec content]
   (let [res (s/conform spec content)]
@@ -77,14 +74,10 @@
                      id-key ;; the name of the id binding if we know it
                      old-id-attrs ;; a set of id+attr so the node can keep track of which facts are "new"
                      disable-fast-updates ;; boolean indicating it isn't safe to do fast updates
-                     shared-node-ids ;; a set of JoinNode ids that are shared with this one
                      ])
 (defrecord Condition [nodes ;; vector of AlphaNode
                       bindings ;; vector of Binding
                       opts ;; map of options
-                      tuple ;; vector representing the condition's original form in the :what block
-                      shared-rule-name ;; name of rule this is shared with
-                      shared-junction ;; boolean indicating if this is the junction point from the shared node
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
@@ -95,8 +88,7 @@
 (defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
                     last-id ;; last id assigned to a beta node
-                    root-node-ids ;; map of rule name -> the id of the associated root JoinNode
-                    leaf-node-ids ;; map of rule name -> the id of the associated leaf MemoryNode
+                    rule-ids ;; map of rule name -> the id of the associated MemoryNode
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     then-finally-queue ;; set of MemoryNode ids that need executed
@@ -112,17 +104,14 @@
                                                           :successors []
                                                           :facts {}}))))
 
-(defn- ->condition [{:keys [id attr value opts] :as parsed}]
-  (-> {:bindings [] :nodes [] :opts opts :tuple (->> parsed
-                                                     ((juxt :id :attr :value))
-                                                     (mapv second)
-                                                     (list 'quote))}
+(defn- ->condition [{:keys [id attr value opts]}]
+  (-> {:bindings [] :nodes [] :opts opts}
       (add-to-condition :id id)
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
 (defn ->rule [[rule-name rule]]
-  (let [{:keys [with-block what-block when-block then-block then-finally-block]} rule
+  (let [{:keys [what-block when-block then-block then-finally-block]} rule
         conditions (mapv ->condition (:body what-block))
         when-body (:body when-block)
         when-body (if (> (count when-body) 1)
@@ -143,7 +132,6 @@
                   symbol)
      :conditions conditions
      :arg {:keys syms}
-     :with (:body with-block)
      :when-body when-body
      :then-body then-body
      :then-finally-body then-finally-body}))
@@ -173,7 +161,7 @@
         (recur parent-id))
       -1)))
 
-(defn- add-condition [session i condition]
+(defn- add-condition [session condition]
   (let [*alpha-node-path (volatile! [:alpha-node])
         session (update session :alpha-node add-alpha-node (:nodes condition) *alpha-node-path)
         alpha-node-path @*alpha-node-path
@@ -195,32 +183,16 @@
                                   :condition condition
                                   :id-key nil
                                   :old-id-attrs #{}
-                                  :disable-fast-updates false
-                                  :shared-node-ids #{}})
+                                  :disable-fast-updates false})
         session (-> session
                     (assoc-in [:beta-nodes join-node-id] join-node)
                     (assoc-in [:beta-nodes mem-node-id] mem-node))
-        ;; if the condition is shared, get the right shared node and update its :shared-node-ids
-        ;; otherwise, add the join node to the alpha node's :successors
-        session (if-let [shared-rule-name (:shared-rule-name condition)]
-                  (if-not (:shared-junction condition)
-                    session
-                    (let [shared-node-id (or (get-in session [:root-node-ids shared-rule-name])
-                                             (throw (ex-info (str "Can't find rule " shared-rule-name) {})))
-                          shared-node-id (reduce
-                                           (fn [node-id _]
-                                             (let [node (get-in session [:beta-nodes node-id])
-                                                   mem-node (get-in session [:beta-nodes (:child-id node)])]
-                                               (:child-id mem-node)))
-                                           shared-node-id
-                                           (range 0 i))]
-                      (update-in session [:beta-nodes shared-node-id :shared-node-ids] conj join-node-id)))
-                  (let [successor-ids (conj (:successors (get-in session alpha-node-path))
-                                            join-node-id)
-                        ;; successors must be sorted by ancestry (descendents first) to avoid duplicate rule firings
-                        successor-ids (sort (partial is-ancestor session) successor-ids)]
-                    (update-in session alpha-node-path assoc :successors successor-ids)))]
+        successor-ids (conj (:successors (get-in session alpha-node-path))
+                            join-node-id)
+        ;; successors must be sorted by ancestry (descendents first) to avoid duplicate rule firings
+        successor-ids (sort (partial is-ancestor session) successor-ids)]
     (-> session
+        (update-in alpha-node-path assoc :successors successor-ids)
         (cond-> parent-mem-node-id
                 (assoc-in [:beta-nodes parent-mem-node-id :child-id] join-node-id))
         (assoc :last-id @*last-id)
@@ -292,14 +264,9 @@
    (if-let [new-vars (get-vars-from-fact vars (:condition join-node) alpha-fact)]
      (let [id+attr (get-id-attr alpha-fact)
            id+attrs (conj id+attrs id+attr)
-           new-token (->Token alpha-fact (:kind token) nil)]
-       (reduce
-         (fn [session join-node]
-           (let [new? (not (contains? (:old-id-attrs join-node) id+attr))]
-             (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?)))
-         session
-         (conj (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))
-               join-node)))
+           new-token (->Token alpha-fact (:kind token) nil)
+           new? (not (contains? (:old-id-attrs join-node) id+attr))]
+       (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
      session)))
 
 (defn- left-activate-memory-node [session node-id id+attrs vars {:keys [kind] :as token} new?]
@@ -356,31 +323,23 @@
       (left-activate-join-node session join-node-id id+attrs vars token)
       session)))
 
-(defn- right-activate-join-node
-  ([session node-id id+attr {:keys [fact] :as token}]
-   (let [{:keys [condition id-key] :as node} (get-in session [:beta-nodes node-id])]
-     (if-let [parent-id (:parent-id node)]
-       (reduce-kv
-         (fn [session id+attrs {existing-vars :vars}]
-           ;; SHORTCUT: if we know the id, compare it with the token right away
-           (if (some->> id-key (get existing-vars) (not= (:id fact)))
-             session
-             (if-let [vars (get-vars-from-fact existing-vars condition fact)]
-               (right-activate-join-node session node (conj id+attrs id+attr) vars token)
-               session)))
-         session
-         (get-in session [:beta-nodes parent-id :matches]))
-       ;; root node
-       (if-let [vars (get-vars-from-fact {} condition fact)]
-         (right-activate-join-node session node [id+attr] vars token)
-         session))))
-  ([session join-node id+attrs vars token]
-   (reduce
-     (fn [session join-node]
-       (left-activate-memory-node session (:child-id join-node) id+attrs vars token true))
-     session
-     (conj (map #(get-in session [:beta-nodes %]) (:shared-node-ids join-node))
-           join-node))))
+(defn- right-activate-join-node [session node-id id+attr {:keys [fact] :as token}]
+  (let [{:keys [condition child-id id-key] :as node} (get-in session [:beta-nodes node-id])]
+    (if-let [parent-id (:parent-id node)]
+      (reduce-kv
+        (fn [session id+attrs {existing-vars :vars}]
+          ;; SHORTCUT: if we know the id, compare it with the token right away
+          (if (some->> id-key (get existing-vars) (not= (:id fact)))
+            session
+            (if-let [vars (get-vars-from-fact existing-vars condition fact)]
+              (left-activate-memory-node session child-id (conj id+attrs id+attr) vars token true)
+              session)))
+        session
+        (get-in session [:beta-nodes parent-id :matches]))
+      ;; root node
+      (if-let [vars (get-vars-from-fact {} condition fact)]
+        (left-activate-memory-node session child-id [id+attr] vars token true)
+        session))))
 
 (defn- right-activate-alpha-node [session node-path {:keys [fact kind old-fact] :as token}]
   (let [[id attr :as id+attr] (get-id-attr fact)]
@@ -413,13 +372,12 @@
                              fact))))
           (reduce
             (fn [session child-id]
-              (let [node (get-in session [:beta-nodes child-id])]
-                (if (and (= :update kind)
-                         (:disable-fast-updates node))
-                  (-> session
-                      (right-activate-join-node child-id id+attr (->Token old-fact :retract nil))
-                      (right-activate-join-node child-id id+attr (->Token fact :insert old-fact)))
-                  (right-activate-join-node session child-id id+attr token))))
+              (if (and (= :update kind)
+                       (get-in session [:beta-nodes child-id :disable-fast-updates]))
+                (-> session
+                    (right-activate-join-node child-id id+attr (->Token old-fact :retract nil))
+                    (right-activate-join-node child-id id+attr (->Token fact :insert old-fact)))
+                (right-activate-join-node session child-id id+attr token)))
             $
             (:successors (get-in session node-path))))))
 
@@ -473,69 +431,6 @@
           (right-activate-alpha-node session node-path (->Token fact :insert nil)))
         session
         node-paths))))
-
-(defn- prep-rules-for-node-sharing [rules]
-  (->> rules
-       ;; for rules using :with, update their :conditions
-       ;; so they point to the rule they are sharing with
-       ((fn [rules]
-          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)]
-            (reduce
-              (fn [v rule]
-                (if-let [parent-rule-name (:with rule)]
-                  (->> (loop [hierarchy [(:rule-name rule)]
-                              parent-rule-name parent-rule-name
-                              conditions (:conditions rule)]
-                         (if-let [parent-rule (rule-name->rule parent-rule-name)]
-                           (let [next-hierarchy (conj hierarchy parent-rule-name)
-                                 parent-conditions (:conditions parent-rule)
-                                 next-conditions
-                                   (reduce-kv
-                                     (fn [conditions i condition]
-                                       (conj conditions
-                                         (if-let [parent-condition (get parent-conditions i)]
-                                           (let [rule-name (last hierarchy)
-                                                 ;; we must call `last` because we quoted it
-                                                 tuple (last (:tuple condition))
-                                                 parent-tuple (last (:tuple parent-condition))]
-                                             (when (not= tuple parent-tuple)
-                                               (throw (ex-info (str rule-name " cannot be defined :with " parent-rule-name \newline
-                                                                    "because tuple #" (inc i) " in the :what block doesn't match:" \newline \newline
-                                                                    parent-tuple " is in " parent-rule-name \newline
-                                                                    tuple " is in " rule-name)
-                                                               {})))
-                                             (assoc condition
-                                                    :shared-rule-name (:rule-name parent-rule)
-                                                    :shared-junction (= i (dec (count parent-conditions)))))
-                                           condition)))
-                                     []
-                                     conditions)]
-                             (if (contains? (set hierarchy) parent-rule-name)
-                               (throw (ex-info (str "Circular dependency: " (str/join " -> " next-hierarchy)) {}))
-                               (if-let [next-rule-name (:with parent-rule)]
-                                 (recur next-hierarchy next-rule-name next-conditions)
-                                 {:parents (set (drop 1 next-hierarchy))
-                                  :conditions next-conditions})))
-                           (throw (ex-info (str "Cannot extend " parent-rule-name " because it isn't in the ruleset") {}))))
-                       (merge rule)
-                       (conj v))
-                  (conj v rule)))
-              []
-              rules))))
-       ;; make sure rules come after the rules they extend via topological sorting
-       ((fn [rules]
-          (let [rule-name->rule (reduce #(assoc %1 (:rule-name %2) %2) {} rules)
-                rule-name->parents (reduce #(assoc %1 (:rule-name %2) (:parents %2)) {} rules)
-                depth (fn depth [x]
-                        (if (empty? (rule-name->parents x))
-                          0
-                          (->> x rule-name->parents (map depth) (apply max) inc)))
-                ordered-rules (->> (keys rule-name->parents)
-                                   (group-by depth)
-                                   (sort-by key)
-                                   (map val)
-                                   (mapcat identity))]
-            (mapv rule-name->rule ordered-rules))))))
 
 (def ^:private ^:dynamic *mutable-session* nil)
 
@@ -600,11 +495,10 @@
 (defn add-rule
   "Adds a rule to the given session."
   [session rule]
-  (when (get-in session [:leaf-node-ids (:name rule)])
+  (when (get-in session [:rule-ids (:name rule)])
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
-        session (reduce-kv add-condition session conditions)
-        root-node-id (-> session :join-node-ids first)
+        session (reduce add-condition session conditions)
         leaf-node-id (-> session :mem-node-ids last)
         ;; the bindings (symbols) from the :what block
         bindings (:bindings session)
@@ -640,29 +534,25 @@
         (assoc-in [:beta-nodes leaf-node-id :when-fn] (:when-fn rule))
         (assoc-in [:beta-nodes leaf-node-id :then-fn] (:then-fn rule))
         (assoc-in [:beta-nodes leaf-node-id :then-finally-fn] (:then-finally-fn rule))
-        (assoc-in [:root-node-ids (:name rule)] root-node-id)
-        (assoc-in [:leaf-node-ids (:name rule)] leaf-node-id)
+        (assoc-in [:rule-ids (:name rule)] leaf-node-id)
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
 (defmacro ruleset
   "Returns a vector of rules after transforming the given map."
   [rules]
-  (->> (parse ::rules rules)
-       (mapv ->rule)
-       prep-rules-for-node-sharing
-       ;; return a vector of Rule constructors
-       (reduce
-         (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
-           (conj v `(->Rule ~rule-name
-                            (mapv map->Condition ~conditions)
-                            ~(when (some? when-body) ;; need some? because it could be `false`
-                               `(fn ~fn-name [~arg] ~when-body))
-                            ~(when then-body
-                               `(fn ~fn-name [~arg] ~@then-body))
-                            ~(when then-finally-body
-                               `(fn ~fn-name [] ~@then-finally-body)))))
-         [])))
+  (reduce
+    (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
+      (conj v `(->Rule ~rule-name
+                       (mapv map->Condition ~conditions)
+                       ~(when (some? when-body) ;; need some? because it could be `false`
+                          `(fn ~fn-name [~arg] ~when-body))
+                       ~(when then-body
+                          `(fn ~fn-name [~arg] ~@then-body))
+                       ~(when then-finally-body
+                          `(fn ~fn-name [] ~@then-finally-body)))))
+    []
+    (mapv ->rule (parse ::rules rules))))
 
 (defn ->session
   "Returns an empty session."
@@ -676,8 +566,7 @@
                                   :facts {}})
      :beta-nodes {}
      :last-id -1
-     :root-node-ids {}
-     :leaf-node-ids {}
+     :rule-ids {}
      :id-attr-nodes {}
      :then-queue #{}
      :then-finally-queue #{}}))
@@ -795,7 +684,7 @@
 
 (s/fdef query-all
   :args (s/cat :session ::session
-               :rule-name (s/? ::rule-name)))
+               :rule-name (s/? qualified-keyword?)))
 
 (defn query-all
   "When called with just a session, returns a vector of all inserted facts.
@@ -807,7 +696,7 @@
                ((juxt :id :attr :value))))
          (:id-attr-nodes session)))
   ([session rule-name]
-   (let [rule-id (or (get-in session [:leaf-node-ids rule-name])
+   (let [rule-id (or (get-in session [:rule-ids rule-name])
                      (throw (ex-info (str rule-name " not in session") {})))
          rule (get-in session [:beta-nodes rule-id])]
      (reduce-kv
