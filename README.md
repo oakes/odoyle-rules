@@ -44,7 +44,7 @@ Advantages compared to Clara:
 Disadvantages compared to Clara:
 
 * Clara supports [truth maintenance](https://www.clara-rules.org/docs/truthmaint/), which can be a very useful feature in some domains.
-* Clara may be faster (but check out the "Performance" section below).
+* Clara is probably faster out of the box (but check out the "Performance" section below).
 
 The design of O'Doyle is almost a carbon copy of my Nim rules engine, [pararules](https://github.com/paranim/pararules).
 
@@ -424,7 +424,7 @@ It turns out that a feature we've already discussed can solve this: derived fact
            o/reset!)]}))
 ```
 
-With `o/*match*` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.
+With `*match*` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.
 
 This will be faster because we now are only doing the join once, and all subsequent rules are just using the derived fact. As the number of joined tuples gets larger, the performance difference gets more and more substantial.
 
