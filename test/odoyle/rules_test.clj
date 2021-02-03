@@ -752,3 +752,48 @@
                               :id)))
          session))))
 
+(deftest recursion-limit
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::rule1
+           [:what
+            [::alice ::color c]
+            :then
+            (o/reset! (o/insert o/*session* ::alice ::height 15))]
+           
+           ::rule2
+           [:what
+            [::alice ::height height]
+            :then
+            (o/reset! (o/insert o/*session* ::alice ::age 10))]
+           
+           ::rule3
+           [:what
+            [::alice ::age age]
+            :then
+            (o/reset! (-> o/*session*
+                          (o/insert ::alice ::color "maize")
+                          (o/insert ::bob ::age 10)))]
+           
+           ::rule4
+           [:what
+            [::bob ::age age]
+            :then
+            (o/reset! (o/insert o/*session* ::bob ::height 15))]
+           
+           ::rule5
+           [:what
+            [::bob ::height height]
+            :then
+            (o/reset! (o/insert o/*session* ::bob ::age 10))]
+           
+           ::rule6
+           [:what
+            [::bob ::color c]
+            :then
+            (o/reset! (o/insert o/*session* ::bob ::color c))]}))
+      (o/insert ::alice ::color "red")
+      (o/insert ::bob ::color "blue")
+      ((fn [session]
+        (is (thrown? Exception (o/fire-rules session)))))))
+

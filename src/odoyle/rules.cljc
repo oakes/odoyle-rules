@@ -88,10 +88,12 @@
 (defrecord Session [alpha-node ;; AlphaNode
                     beta-nodes ;; map of int -> MemoryNode or JoinNode
                     last-id ;; last id assigned to a beta node
-                    rule-ids ;; map of rule name -> the id of the associated MemoryNode
+                    rule-name->node-id ;; map of rule name -> the id of the associated MemoryNode
+                    node-id->rule-name ;; map of the id of a MemoryNode -> the associated rule name
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     then-finally-queue ;; set of MemoryNode ids that need executed
+                    recursion-limit ;; how many times can fire-rules recur
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -269,6 +271,8 @@
        (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
      session)))
 
+(def ^:private ^:dynamic *triggered-node-ids* nil)
+
 (defn- left-activate-memory-node [session node-id id+attrs vars {:keys [kind] :as token} new?]
   (let [node-path [:beta-nodes node-id]
         node (get-in session node-path)
@@ -284,7 +288,10 @@
                                      (then (-> token :fact :value) (:value old-fact))
                                      true))
                            true))
-                  (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true)
+                  (do
+                    (when *triggered-node-ids*
+                      (vswap! *triggered-node-ids* conj (:leaf-node-id node)))
+                    (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true))
                   session)
         node (get-in session node-path) ;; get node again since trigger may have updated
         leaf-node? (= (:id node) (:leaf-node-id node))
@@ -434,6 +441,9 @@
 
 (def ^:private ^:dynamic *mutable-session* nil)
 
+(def ^:private ^:dynamic *recur-countdown* nil)
+(def ^:private ^:dynamic *executed-nodes* nil)
+
 ;; public
 
 (def ^{:dynamic true
@@ -455,7 +465,8 @@
     (if (and (or (seq then-queue) (seq then-finally-queue))
              ;; don't fire while inside a rule
              (nil? *session*))
-      (let [;; reset state
+      (let [*node-id->triggered-node-ids (volatile! {})
+            ;; reset state
             session (assoc session :then-queue #{} :then-finally-queue #{})
             session (reduce
                       (fn [session node-id]
@@ -471,8 +482,10 @@
                                 (when enabled
                                   (binding [*session* session
                                             *mutable-session* (volatile! session)
-                                            *match* vars]
+                                            *match* vars
+                                            *triggered-node-ids* (volatile! #{})]
                                     (then-fn vars)
+                                    (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))
                                     @*mutable-session*)))
                               session)))
                       session
@@ -483,19 +496,71 @@
                         (let [node (get-in session [:beta-nodes node-id])
                               {:keys [then-finally-fn]} node]
                           (binding [*session* session
-                                    *mutable-session* (volatile! session)]
+                                    *mutable-session* (volatile! session)
+                                    *triggered-node-ids* (volatile! #{})]
                             (then-finally-fn)
+                            (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))
                             @*mutable-session*)))
                       session
                       then-finally-queue)]
         ;; recur because there may be new blocks to execute
-        (fire-rules session))
+        (if-let [limit (:recursion-limit session)]
+          (if (= 0 *recur-countdown*)
+            (let [trigger-map (reduce
+                                (fn [m node-id->triggered-node-ids]
+                                  (reduce-kv
+                                    (fn [m2 node-id triggered-node-ids]
+                                      (assoc m2 ((:node-id->rule-name session) node-id)
+                                             (reduce
+                                               (fn [m3 triggered-node-id]
+                                                 (let [rule-name ((:node-id->rule-name session) triggered-node-id)]
+                                                   (assoc m3 rule-name (get m rule-name))))
+                                               {}
+                                               triggered-node-ids)))
+                                    {}
+                                    node-id->triggered-node-ids))
+                                {}
+                                (reverse *executed-nodes*))
+                  find-cycles (fn find-cycles [cycles [k v] cyc]
+                                (if (contains? (set cyc) k)
+                                  (conj cycles (vec (drop-while #(not= % k) (conj cyc k))))
+                                  (reduce
+                                    (fn [cycles pair]
+                                      (find-cycles cycles pair (conj cyc k)))
+                                    cycles
+                                    v)))
+                  cycles (reduce
+                           (fn [cycles pair]
+                             (find-cycles cycles pair []))
+                           #{}
+                           trigger-map)]
+              (throw (ex-info (str "Recursion limit hit" \newline
+                                   "This is probably an infinite loop" \newline
+                                   "The current recursion limit is " limit " (set by the :recursion-limit option)" \newline
+                                   (reduce
+                                     (fn [s cyc]
+                                       (str s "Cycle detected! "
+                                            (if (= 2 (count cyc))
+                                              (str (first cyc) " is triggering itself")
+                                              (str/join " -> " cyc))
+                                            \newline))
+                                     \newline
+                                     cycles)
+                                   \newline "Try using {:then false} to prevent triggering rules in an infinite loop")
+                              {})))
+            (binding [*recur-countdown* (if (nil? *recur-countdown*)
+                                          limit
+                                          (dec *recur-countdown*))
+                      *executed-nodes* (conj (or *executed-nodes* [])
+                                             @*node-id->triggered-node-ids)]
+              (fire-rules session)))
+          (fire-rules session)))
       session)))
 
 (defn add-rule
   "Adds a rule to the given session."
   [session rule]
-  (when (get-in session [:rule-ids (:name rule)])
+  (when (get-in session [:rule-name->node-id (:name rule)])
     (throw (ex-info (str (:name rule) " already exists in session") {})))
   (let [conditions (:conditions rule)
         session (reduce add-condition session conditions)
@@ -534,7 +599,8 @@
         (assoc-in [:beta-nodes leaf-node-id :when-fn] (:when-fn rule))
         (assoc-in [:beta-nodes leaf-node-id :then-fn] (:then-fn rule))
         (assoc-in [:beta-nodes leaf-node-id :then-finally-fn] (:then-finally-fn rule))
-        (assoc-in [:rule-ids (:name rule)] leaf-node-id)
+        (assoc-in [:rule-name->node-id (:name rule)] leaf-node-id)
+        (assoc-in [:node-id->rule-name leaf-node-id] (:name rule))
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
@@ -556,20 +622,27 @@
 
 (defn ->session
   "Returns an empty session."
-  []
-  (map->Session
-    {:alpha-node (map->AlphaNode {:path nil
-                                  :test-field nil
-                                  :test-value nil
-                                  :children []
-                                  :successors []
-                                  :facts {}})
-     :beta-nodes {}
-     :last-id -1
-     :rule-ids {}
-     :id-attr-nodes {}
-     :then-queue #{}
-     :then-finally-queue #{}}))
+  ([]
+   (->session {}))
+  ([opts]
+   (let [{:keys [recursion-limit]
+          } (merge {:recursion-limit 10}
+                   opts)]
+     (map->Session
+       {:alpha-node (map->AlphaNode {:path nil
+                                     :test-field nil
+                                     :test-value nil
+                                     :children []
+                                     :successors []
+                                     :facts {}})
+        :beta-nodes {}
+        :last-id -1
+        :rule-name->node-id {}
+        :node-id->rule-name {}
+        :id-attr-nodes {}
+        :then-queue #{}
+        :then-finally-queue #{}
+        :recursion-limit recursion-limit}))))
 
 (s/def ::session #(instance? Session %))
 
@@ -696,7 +769,7 @@
                ((juxt :id :attr :value))))
          (:id-attr-nodes session)))
   ([session rule-name]
-   (let [rule-id (or (get-in session [:rule-ids rule-name])
+   (let [rule-id (or (get-in session [:rule-name->node-id rule-name])
                      (throw (ex-info (str rule-name " not in session") {})))
          rule (get-in session [:beta-nodes rule-id])]
      (reduce-kv
