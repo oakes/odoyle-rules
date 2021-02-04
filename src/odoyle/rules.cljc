@@ -289,7 +289,7 @@
                                      true))
                            true))
                   (do
-                    (when *triggered-node-ids*
+                    (when *triggered-node-ids* ;; this is only used to improve errors. see `fire-rules`
                       (vswap! *triggered-node-ids* conj (:leaf-node-id node)))
                     (assoc-in session [:beta-nodes (:leaf-node-id node) :trigger] true))
                   session)
@@ -439,8 +439,53 @@
         session
         node-paths))))
 
-(def ^:private ^:dynamic *mutable-session* nil)
+(defn- throw-recursion-limit [session limit executed-nodes]
+  (let [;; make a hierarchical map of rule executions
+        trigger-map (reduce
+                      (fn [m node-id->triggered-node-ids]
+                        (reduce-kv
+                          (fn [m2 node-id triggered-node-ids]
+                            (assoc m2 ((:node-id->rule-name session) node-id)
+                                   (reduce
+                                     (fn [m3 triggered-node-id]
+                                       (let [rule-name ((:node-id->rule-name session) triggered-node-id)]
+                                         (assoc m3 rule-name (get m rule-name))))
+                                     {}
+                                     triggered-node-ids)))
+                          {}
+                          node-id->triggered-node-ids))
+                      {}
+                      (reverse executed-nodes))
+        ;; find all rules that execute themselves (directly or indirectly)
+        find-cycles (fn find-cycles [cycles [k v] cyc]
+                      (if (contains? (set cyc) k)
+                        (conj cycles (vec (drop-while #(not= % k) (conj cyc k))))
+                        (reduce
+                          (fn [cycles pair]
+                            (find-cycles cycles pair (conj cyc k)))
+                          cycles
+                          v)))
+        cycles (reduce
+                 (fn [cycles pair]
+                   (find-cycles cycles pair []))
+                 #{}
+                 trigger-map)]
+    (throw (ex-info (str "Recursion limit hit." \newline
+                         "This is probably an infinite loop." \newline
+                         "The current recursion limit is " limit " (set by the :recursion-limit option)." \newline
+                         (reduce
+                           (fn [s cyc]
+                             (str s "Cycle detected! "
+                                  (if (= 2 (count cyc))
+                                    (str (first cyc) " is triggering itself.")
+                                    (str/join " -> " cyc))
+                                  \newline))
+                           \newline
+                           cycles)
+                         \newline "Try using {:then false} to prevent triggering rules in an infinite loop.")
+                    {}))))
 
+(def ^:private ^:dynamic *mutable-session* nil)
 (def ^:private ^:dynamic *recur-countdown* nil)
 (def ^:private ^:dynamic *executed-nodes* nil)
 
@@ -465,7 +510,13 @@
     (if (and (or (seq then-queue) (seq then-finally-queue))
              ;; don't fire while inside a rule
              (nil? *session*))
-      (let [*node-id->triggered-node-ids (volatile! {})
+      (let [;; make an fn that will save which rules are triggered by the rules we're about to fire.
+            ;; this will be useful for making a nice error message if an infinite loop happens.
+            *node-id->triggered-node-ids (volatile! {})
+            execute-fn (fn [f node-id]
+                         (binding [*triggered-node-ids* (volatile! #{})]
+                           (f)
+                           (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))))
             ;; reset state
             session (assoc session :then-queue #{} :then-finally-queue #{})
             session (reduce
@@ -482,10 +533,8 @@
                                 (when enabled
                                   (binding [*session* session
                                             *mutable-session* (volatile! session)
-                                            *match* vars
-                                            *triggered-node-ids* (volatile! #{})]
-                                    (then-fn vars)
-                                    (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))
+                                            *match* vars]
+                                    (execute-fn #(then-fn vars) node-id)
                                     @*mutable-session*)))
                               session)))
                       session
@@ -496,58 +545,15 @@
                         (let [node (get-in session [:beta-nodes node-id])
                               {:keys [then-finally-fn]} node]
                           (binding [*session* session
-                                    *mutable-session* (volatile! session)
-                                    *triggered-node-ids* (volatile! #{})]
-                            (then-finally-fn)
-                            (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))
+                                    *mutable-session* (volatile! session)]
+                            (execute-fn then-finally-fn node-id)
                             @*mutable-session*)))
                       session
                       then-finally-queue)]
         ;; recur because there may be new blocks to execute
         (if-let [limit (:recursion-limit session)]
           (if (= 0 *recur-countdown*)
-            (let [trigger-map (reduce
-                                (fn [m node-id->triggered-node-ids]
-                                  (reduce-kv
-                                    (fn [m2 node-id triggered-node-ids]
-                                      (assoc m2 ((:node-id->rule-name session) node-id)
-                                             (reduce
-                                               (fn [m3 triggered-node-id]
-                                                 (let [rule-name ((:node-id->rule-name session) triggered-node-id)]
-                                                   (assoc m3 rule-name (get m rule-name))))
-                                               {}
-                                               triggered-node-ids)))
-                                    {}
-                                    node-id->triggered-node-ids))
-                                {}
-                                (reverse *executed-nodes*))
-                  find-cycles (fn find-cycles [cycles [k v] cyc]
-                                (if (contains? (set cyc) k)
-                                  (conj cycles (vec (drop-while #(not= % k) (conj cyc k))))
-                                  (reduce
-                                    (fn [cycles pair]
-                                      (find-cycles cycles pair (conj cyc k)))
-                                    cycles
-                                    v)))
-                  cycles (reduce
-                           (fn [cycles pair]
-                             (find-cycles cycles pair []))
-                           #{}
-                           trigger-map)]
-              (throw (ex-info (str "Recursion limit hit" \newline
-                                   "This is probably an infinite loop" \newline
-                                   "The current recursion limit is " limit " (set by the :recursion-limit option)" \newline
-                                   (reduce
-                                     (fn [s cyc]
-                                       (str s "Cycle detected! "
-                                            (if (= 2 (count cyc))
-                                              (str (first cyc) " is triggering itself")
-                                              (str/join " -> " cyc))
-                                            \newline))
-                                     \newline
-                                     cycles)
-                                   \newline "Try using {:then false} to prevent triggering rules in an infinite loop")
-                              {})))
+            (throw-recursion-limit session limit *executed-nodes*)
             (binding [*recur-countdown* (if (nil? *recur-countdown*)
                                           limit
                                           (dec *recur-countdown*))
