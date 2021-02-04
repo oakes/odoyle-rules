@@ -458,7 +458,7 @@
   :args (s/cat :session ::session))
 
 (defn fire-rules
-  "Fires :then and :then-finally blocks for any rules with a complete set of matches."
+  "Fires :then and :then-finally blocks for any rules whose matches have been updated."
   [session]
   (let [then-queue (:then-queue session)
         then-finally-queue (:then-finally-queue session)]
@@ -621,7 +621,10 @@
     (mapv ->rule (parse ::rules rules))))
 
 (defn ->session
-  "Returns an empty session."
+  "Returns a new session. The opts map can contain:
+  
+    :recursion-limit   -   The number of times fire-rules can recursively call rules.
+                           The default is 10. Pass nil to disable the limit entirely."
   ([]
    (->session {}))
   ([opts]
