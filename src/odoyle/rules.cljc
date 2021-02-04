@@ -93,7 +93,6 @@
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     then-finally-queue ;; set of MemoryNode ids that need executed
-                    recursion-limit ;; how many times can fire-rules recur
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -472,7 +471,7 @@
                  trigger-map)]
     (throw (ex-info (str "Recursion limit hit." \newline
                          "This is probably an infinite loop." \newline
-                         "The current recursion limit is " limit " (set by the :recursion-limit option)." \newline
+                         "The current recursion limit is " limit " (set by the recursion-limit arg of fire-rules)." \newline
                          (reduce
                            (fn [s cyc]
                              (str s "Cycle detected! "
@@ -500,68 +499,74 @@
   *match* nil)
 
 (s/fdef fire-rules
-  :args (s/cat :session ::session))
+  :args (s/cat :session ::session
+               :recursion-limit (s/? (s/nilable pos?))))
 
 (defn fire-rules
-  "Fires :then and :then-finally blocks for any rules whose matches have been updated."
-  [session]
-  (let [then-queue (:then-queue session)
-        then-finally-queue (:then-finally-queue session)]
-    (if (and (or (seq then-queue) (seq then-finally-queue))
-             ;; don't fire while inside a rule
-             (nil? *session*))
-      (let [;; make an fn that will save which rules are triggered by the rules we're about to fire.
-            ;; this will be useful for making a nice error message if an infinite loop happens.
-            *node-id->triggered-node-ids (volatile! {})
-            execute-fn (fn [f node-id]
-                         (binding [*triggered-node-ids* (volatile! #{})]
-                           (f)
-                           (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))))
-            ;; reset state
-            session (assoc session :then-queue #{} :then-finally-queue #{})
-            session (reduce
-                      (fn [session node-id]
-                        (update-in session [:beta-nodes node-id] assoc :trigger false))
-                      session
-                      (into then-finally-queue (map first then-queue)))
-            ;; execute :then functions
-            session (reduce
-                      (fn [session [node-id id+attrs]]
-                        (let [node (get-in session [:beta-nodes node-id])
-                              {:keys [matches then-fn]} node]
-                          (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
-                                (when enabled
-                                  (binding [*session* session
-                                            *mutable-session* (volatile! session)
-                                            *match* vars]
-                                    (execute-fn #(then-fn vars) node-id)
-                                    @*mutable-session*)))
-                              session)))
-                      session
-                      then-queue)
-            ;; execute :then-finally functions
-            session (reduce
-                      (fn [session node-id]
-                        (let [node (get-in session [:beta-nodes node-id])
-                              {:keys [then-finally-fn]} node]
-                          (binding [*session* session
-                                    *mutable-session* (volatile! session)]
-                            (execute-fn then-finally-fn node-id)
-                            @*mutable-session*)))
-                      session
-                      then-finally-queue)]
-        ;; recur because there may be new blocks to execute
-        (if-let [limit (:recursion-limit session)]
-          (if (= 0 *recur-countdown*)
-            (throw-recursion-limit session limit *executed-nodes*)
-            (binding [*recur-countdown* (if (nil? *recur-countdown*)
-                                          limit
-                                          (dec *recur-countdown*))
-                      *executed-nodes* (conj (or *executed-nodes* [])
-                                             @*node-id->triggered-node-ids)]
-              (fire-rules session)))
-          (fire-rules session)))
-      session)))
+  "Fires :then and :then-finally blocks for any rules whose matches have been updated.
+  
+  The recursion limit will throw an error if rules recursively trigger that many times.
+  The default is 10. Pass `nil` to disable the limit entirely."
+  ([session]
+   (fire-rules session 10))
+  ([session recursion-limit]
+   (let [then-queue (:then-queue session)
+         then-finally-queue (:then-finally-queue session)]
+     (if (and (or (seq then-queue) (seq then-finally-queue))
+              ;; don't fire while inside a rule
+              (nil? *session*))
+       (let [;; make an fn that will save which rules are triggered by the rules we're about to fire.
+             ;; this will be useful for making a nice error message if an infinite loop happens.
+             *node-id->triggered-node-ids (volatile! {})
+             execute-fn (fn [f node-id]
+                          (binding [*triggered-node-ids* (volatile! #{})]
+                            (f)
+                            (vswap! *node-id->triggered-node-ids update node-id #(into (or % #{}) @*triggered-node-ids*))))
+             ;; reset state
+             session (assoc session :then-queue #{} :then-finally-queue #{})
+             session (reduce
+                       (fn [session node-id]
+                         (update-in session [:beta-nodes node-id] assoc :trigger false))
+                       session
+                       (into then-finally-queue (map first then-queue)))
+             ;; execute :then functions
+             session (reduce
+                       (fn [session [node-id id+attrs]]
+                         (let [node (get-in session [:beta-nodes node-id])
+                               {:keys [matches then-fn]} node]
+                           (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
+                                 (when enabled
+                                   (binding [*session* session
+                                             *mutable-session* (volatile! session)
+                                             *match* vars]
+                                     (execute-fn #(then-fn vars) node-id)
+                                     @*mutable-session*)))
+                               session)))
+                       session
+                       then-queue)
+             ;; execute :then-finally functions
+             session (reduce
+                       (fn [session node-id]
+                         (let [node (get-in session [:beta-nodes node-id])
+                               {:keys [then-finally-fn]} node]
+                           (binding [*session* session
+                                     *mutable-session* (volatile! session)]
+                             (execute-fn then-finally-fn node-id)
+                             @*mutable-session*)))
+                       session
+                       then-finally-queue)]
+         ;; recur because there may be new blocks to execute
+         (if recursion-limit
+           (if (= 0 *recur-countdown*)
+             (throw-recursion-limit session recursion-limit *executed-nodes*)
+             (binding [*recur-countdown* (if (nil? *recur-countdown*)
+                                           recursion-limit
+                                           (dec *recur-countdown*))
+                       *executed-nodes* (conj (or *executed-nodes* [])
+                                              @*node-id->triggered-node-ids)]
+               (fire-rules session recursion-limit)))
+           (fire-rules session recursion-limit)))
+       session))))
 
 (defn add-rule
   "Adds a rule to the given session."
@@ -627,31 +632,22 @@
     (mapv ->rule (parse ::rules rules))))
 
 (defn ->session
-  "Returns a new session. The opts map can contain:
-  
-    :recursion-limit   -   The number of times fire-rules can recursively call rules.
-                           The default is 10. Pass nil to disable the limit entirely."
-  ([]
-   (->session {}))
-  ([opts]
-   (let [{:keys [recursion-limit]
-          } (merge {:recursion-limit 10}
-                   opts)]
-     (map->Session
-       {:alpha-node (map->AlphaNode {:path nil
-                                     :test-field nil
-                                     :test-value nil
-                                     :children []
-                                     :successors []
-                                     :facts {}})
-        :beta-nodes {}
-        :last-id -1
-        :rule-name->node-id {}
-        :node-id->rule-name {}
-        :id-attr-nodes {}
-        :then-queue #{}
-        :then-finally-queue #{}
-        :recursion-limit recursion-limit}))))
+  "Returns a new session."
+  []
+  (map->Session
+    {:alpha-node (map->AlphaNode {:path nil
+                                  :test-field nil
+                                  :test-value nil
+                                  :children []
+                                  :successors []
+                                  :facts {}})
+     :beta-nodes {}
+     :last-id -1
+     :rule-name->node-id {}
+     :node-id->rule-name {}
+     :id-attr-nodes {}
+     :then-queue #{}
+     :then-finally-queue #{}}))
 
 (s/def ::session #(instance? Session %))
 
