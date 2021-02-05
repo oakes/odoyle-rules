@@ -502,7 +502,7 @@
 
 (s/fdef fire-rules
   :args (s/cat :session ::session
-               :opts (s/? (s/keys :req-un [::recursion-limit]))))
+               :opts (s/? (s/keys :opt-un [::recursion-limit]))))
 
 (defn fire-rules
   "Fires :then and :then-finally blocks for any rules whose matches have been updated.
@@ -511,7 +511,7 @@
   :recursion-limit  -  Throws an error if rules recursively trigger this many times.
                        The default is 16. Pass nil to disable the limit entirely."
   ([session]
-   (fire-rules session {:recursion-limit 16}))
+   (fire-rules session {}))
   ([session opts]
    (let [then-queue (:then-queue session)
          then-finally-queue (:then-finally-queue session)]
@@ -559,7 +559,7 @@
                        session
                        then-finally-queue)]
          ;; recur because there may be new blocks to execute
-         (if-let [limit (:recursion-limit opts)]
+         (if-let [limit (get opts :recursion-limit 16)]
            (if (= 0 *recur-countdown*)
              (throw-recursion-limit session limit *executed-nodes*)
              (binding [*recur-countdown* (if (nil? *recur-countdown*)
