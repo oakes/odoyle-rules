@@ -470,8 +470,8 @@
                  #{}
                  trigger-map)]
     (throw (ex-info (str "Recursion limit hit." \newline
-                         "This is probably an infinite loop." \newline
-                         "The current recursion limit is " limit " (set by the recursion-limit arg of fire-rules)." \newline
+                         "This may be an infinite loop." \newline
+                         "The current recursion limit is " limit " (set by the :recursion-limit option of fire-rules)." \newline
                          (reduce
                            (fn [s cyc]
                              (str s "Cycle detected! "
@@ -498,18 +498,21 @@
        :doc "Provides a map of all the matched values from inside a :then block."}
   *match* nil)
 
+(s/def ::recursion-limit (s/nilable nat-int?))
+
 (s/fdef fire-rules
   :args (s/cat :session ::session
-               :recursion-limit (s/? (s/nilable nat-int?))))
+               :opts (s/? (s/keys :req-un [::recursion-limit]))))
 
 (defn fire-rules
   "Fires :then and :then-finally blocks for any rules whose matches have been updated.
+  The opts map may contain:
   
-  The recursion limit will throw an error if rules recursively trigger that many times.
-  The default is 10. Pass `nil` to disable the limit entirely."
+  :recursion-limit  -  Throws an error if rules recursively trigger this many times.
+                       The default is 16. Pass nil to disable the limit entirely."
   ([session]
-   (fire-rules session 10))
-  ([session recursion-limit]
+   (fire-rules session {:recursion-limit 16}))
+  ([session opts]
    (let [then-queue (:then-queue session)
          then-finally-queue (:then-finally-queue session)]
      (if (and (or (seq then-queue) (seq then-finally-queue))
@@ -556,16 +559,16 @@
                        session
                        then-finally-queue)]
          ;; recur because there may be new blocks to execute
-         (if recursion-limit
+         (if-let [limit (:recursion-limit opts)]
            (if (= 0 *recur-countdown*)
-             (throw-recursion-limit session recursion-limit *executed-nodes*)
+             (throw-recursion-limit session limit *executed-nodes*)
              (binding [*recur-countdown* (if (nil? *recur-countdown*)
-                                           recursion-limit
+                                           limit
                                            (dec *recur-countdown*))
                        *executed-nodes* (conj (or *executed-nodes* [])
                                               @*node-id->triggered-node-ids)]
-               (fire-rules session recursion-limit)))
-           (fire-rules session recursion-limit)))
+               (fire-rules session opts)))
+           (fire-rules session opts)))
        session))))
 
 (defn add-rule
