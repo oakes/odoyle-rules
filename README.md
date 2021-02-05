@@ -166,7 +166,7 @@ Imagine you want to move the player's position based on its current position. So
 ;; => [{:x 20.1, :y 15}]
 ```
 
-The `{:then false}` option tells O'Doyle to not run the `:then` block if that tuple is updated. If you don't include it, you'll get a StackOverflowException because the rule will cause itself to fire in an infinite loop. If all tuples in the `:what` block have `{:then false}`, it will never fire.
+The `{:then false}` option tells O'Doyle to not run the `:then` block if that tuple is updated. If you don't include it, you'll get an exception because the rule will cause itself to fire in an infinite loop. If all tuples in the `:what` block have `{:then false}`, it will never fire.
 
 ## Conditions
 
