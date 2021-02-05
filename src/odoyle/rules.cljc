@@ -500,7 +500,7 @@
 
 (s/fdef fire-rules
   :args (s/cat :session ::session
-               :recursion-limit (s/? (s/nilable pos?))))
+               :recursion-limit (s/? (s/nilable nat-int?))))
 
 (defn fire-rules
   "Fires :then and :then-finally blocks for any rules whose matches have been updated.
