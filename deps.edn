@@ -13,6 +13,11 @@
                   :main-opts ["prod.clj"]}
            :test {:extra-paths ["test"]
                   :main-opts ["test.clj"]}
+           :test-cljs {:extra-paths ["test"]
+                       :extra-deps {olical/cljs-test-runner {:mvn/version "3.7.0"}
+                                    org.clojure/test.check {:mvn/version "1.1.0"}}
+                       :main-opts ["-m" "cljs-test-runner.main"
+                                   "-d" "test"]}
            :bench {:extra-deps {net.sekao/clarax {:mvn/version "0.4.1"}
                                 datascript/datascript {:mvn/version "1.0.1"}
                                 com.clojure-goes-fast/clj-async-profiler {:mvn/version "0.5.0"}}

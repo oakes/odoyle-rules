@@ -2,6 +2,8 @@
   (:require [clojure.spec.alpha :as s]
             [expound.alpha :as expound]
             [clojure.string :as str])
+  #?(:cljs
+      (:require-macros [odoyle.rules :refer [ruleset]]))
   (:refer-clojure :exclude [reset!]))
 
 ;; parsing
@@ -618,7 +620,8 @@
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
-(defmacro ruleset
+#?(:clj
+ (defmacro ruleset
   "Returns a vector of rules after transforming the given map."
   [rules]
   (reduce
@@ -632,7 +635,7 @@
                        ~(when then-finally-body
                           `(fn ~fn-name [] ~@then-finally-body)))))
     []
-    (mapv ->rule (parse ::rules rules))))
+    (mapv ->rule (parse ::rules rules)))))
 
 (defn ->session
   "Returns a new session."
