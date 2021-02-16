@@ -6,3 +6,4 @@ dev-src/public/main.js
 dev-src/public/main.out
 .*
 !.gitignore
+cljs-test-runner-out/
