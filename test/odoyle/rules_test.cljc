@@ -1,5 +1,5 @@
 (ns odoyle.rules-test
-  (:require [clojure.test :refer :all]
+  (:require [clojure.test :refer [deftest is]]
             [odoyle.rules :as o]
             [clojure.spec.test.alpha :as st]))
 
@@ -795,5 +795,6 @@
       (o/insert ::alice ::color "red")
       (o/insert ::bob ::color "blue")
       ((fn [session]
-        (is (thrown? Exception (o/fire-rules session)))))))
+        (is (thrown? #?(:clj Exception :cljs js/Error)
+                     (o/fire-rules session)))))))
 
