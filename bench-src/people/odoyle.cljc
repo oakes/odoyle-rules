@@ -1,5 +1,5 @@
 (ns people.odoyle
-  (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
+  (:require [odoyle.rules :as o]
             [people.core :as core]))
 
 (defn init []

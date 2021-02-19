@@ -1,5 +1,5 @@
 (ns odoyle.examples
-  (:require [odoyle.rules :as o :refer-macros [ruleset]]
+  (:require [odoyle.rules :as o]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as st]
             dynadoc.core)

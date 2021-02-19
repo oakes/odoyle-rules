@@ -1,7 +1,7 @@
 (ns dungeon-crawler.odoyle
   (:require [dungeon-crawler.move :as move]
             [dungeon-crawler.entities :as e]
-            [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]))
+            [odoyle.rules :as o]))
 
 (def rules
   (o/ruleset

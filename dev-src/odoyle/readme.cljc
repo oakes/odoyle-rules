@@ -1,5 +1,5 @@
 (ns odoyle.readme
-  (:require [odoyle.rules :as o #?(:clj :refer :cljs :refer-macros) [ruleset]]
+  (:require [odoyle.rules :as o]
             [clojure.spec.alpha :as s]
             [clojure.spec.test.alpha :as st]
             [#?(:clj clojure.edn :cljs cljs.reader) :as edn]))
