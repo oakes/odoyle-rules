@@ -534,11 +534,15 @@
                          (update-in session [:beta-nodes node-id] assoc :trigger false))
                        session
                        (into then-finally-queue (map first then-queue)))
+             ;; keep a copy of the beta nodes before executing the :then functions.
+             ;; if we pull the beta nodes from inside the reduce fn below,
+             ;; it'll produce non-deterministic results because `matches`
+             ;; could be modified by the reduce itself. see test: non-deterministic-behavior
+             beta-nodes (:beta-nodes session)
              ;; execute :then functions
              session (reduce
                        (fn [session [node-id id+attrs]]
-                         (let [node (get-in session [:beta-nodes node-id])
-                               {:keys [matches then-fn]} node]
+                         (let [{:keys [matches then-fn]} (get beta-nodes node-id)]
                            (or (when-let [{:keys [vars enabled]} (get matches id+attrs)]
                                  (when enabled
                                    (binding [*session* session
@@ -552,8 +556,7 @@
              ;; execute :then-finally functions
              session (reduce
                        (fn [session node-id]
-                         (let [node (get-in session [:beta-nodes node-id])
-                               {:keys [then-finally-fn]} node]
+                         (let [{:keys [then-finally-fn]} (get beta-nodes node-id)]
                            (binding [*session* session
                                      *mutable-session* (volatile! session)]
                              (execute-fn then-finally-fn node-id)

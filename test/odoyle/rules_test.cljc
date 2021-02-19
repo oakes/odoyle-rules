@@ -798,3 +798,31 @@
         (is (thrown? #?(:clj Exception :cljs js/Error)
                      (o/fire-rules session)))))))
 
+(deftest non-deterministic-behavior
+  (let [*count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::rule1
+             [:what
+              [id ::color "blue"]
+              :then
+              (swap! *count inc)
+              (o/insert! id ::color "green")]
+             
+             ::rule2
+             [:what
+              [id ::color "blue"]
+              :then
+              (swap! *count inc)]
+             
+             ::rule3
+             [:what
+              [id ::color "blue"]
+              :then
+              (swap! *count inc)]}))
+        (o/insert ::alice ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (= 3 @*count))
+           session)))))
+
