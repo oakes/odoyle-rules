@@ -169,6 +169,10 @@ Imagine you want to move the player's position based on its current position. So
 
 The `{:then false}` option tells O'Doyle to not run the `:then` block if that tuple is updated. If you don't include it, you'll get an exception because the rule will cause itself to fire in an infinite loop. If all tuples in the `:what` block have `{:then false}`, it will never fire.
 
+While `{:then false}` says "this fact should *never* cause this rule to trigger", you may actually want to say "this fact should *sometimes* cause this rule to trigger", such as only when the fact's new value is different than its old value. You can do this with `{:then not=}`.
+
+Using `{:then not=}` is not a special case; this option can receive *any* function that receives two arguments, the fact's new value and old value. In the example above, that would be the value of `x`. This little feature can be used to write rules that recursively build data structures. See: [Using O'Doyle Rules as a poor man's DataScript](bench-src/todos/README.md).
+
 ## Conditions
 
 Rules have nice a way of breaking apart your logic into independent units. If we want to prevent the player from moving off the right side of the screen, we could add a condition inside of the `:then` block of `::move-player`, but it's good to get in the habit of making separate rules.
