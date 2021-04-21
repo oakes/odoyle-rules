@@ -346,6 +346,69 @@ The solution is to use `:then-finally`:
 
 A `:then-finally` block runs when a rule's matches are changed at all, including from retractions. This also means you won't have access to the bindings from the `:what` block, so if you want to run code on each individual match, you need to use a normal `:then` block before it.
 
+**Important rule of thumb:** When running `query-all` inside a rule, you should *only* query the rule you are inside of, not any other rule. We can illustrate this with an example.
+
+Let's say you want to create a derived fact that contains all characters that are within the window. We need the window dimensions, but we're using `:then-finally`, so we can't just add `[::window ::width window-width]` and `[::window ::height window-height]` to the `:what` block -- we don't have access to those bindings.
+
+Instead, you may be tempted to do this:
+
+```clj
+(defn within? [{:keys [x y]} window-width window-height]
+  (and (>= x 0)
+       (< x window-width)
+       (>= y 0)
+       (< y window-height)))
+
+(def rules
+  (o/ruleset
+    {::window
+     [:what
+      [::window ::width window-width]
+      [::window ::height window-height]]
+
+     ::character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then-finally
+      (let [{:keys [window-width window-height]}
+            (first (o/query-all o/*session* ::window))] ;; warning: this will not be reactive!
+        (->> (o/query-all o/*session* ::character)
+             (filterv #(within? % window-width window-height))
+             (o/insert o/*session* ::derived ::characters-within-window)
+             o/reset!))]}))
+```
+
+Here, we are querying a getter rule to get the window dimensions, and using it to filter the characters. This will work initially, but if we change the window dimentions later, the `:character` rule with *not* re-run, so the `:characters-within-window` derived fact will be inaccurate.
+
+The solution, like is often true in software, is to pull things apart that shouldn't be together:
+
+```clj
+(def rules
+  (o/ruleset
+    {::character
+     [:what
+      [id ::x x]
+      [id ::y y]
+      :then-finally
+      (->> (o/query-all o/*session* ::character)
+           (o/insert o/*session* ::derived ::all-characters)
+           o/reset!)]
+
+     ::characters-within-window
+     [:what
+      [::window ::width window-width]
+      [::window ::height window-height]
+      [::derived ::all-characters all-characters]
+      :then
+      (->> all-characters
+           (filterv #(within? % window-width window-height))
+           (o/insert o/*session* ::derived ::characters-within-window)
+           o/reset!)]}))
+```
+
+First we create a derived fact holding all characters, and then in a separate rule we bring that fact in along with the window dimensions, and create the filtered fact from there. Since these are just normal facts in the `:what` block now, the rule will run when any of them are updated, just like we want it to.
+
 ## Serializing a session
 
 To save a session to the disk or send it over a network, we need to serialize it somehow. While O'Doyle sessions are mostly pure clojure data, it wouldn't be a good idea to directly serialize them. It would prevent you from updating your rules, or possibly even the version of this library, due to all the implementation details contained in the session map after deserializing it.
