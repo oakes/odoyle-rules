@@ -5,6 +5,7 @@
             [#?(:clj clojure.edn :cljs cljs.reader) :as edn]))
 
 (st/instrument)
+(st/unstrument 'odoyle.rules/insert)
 
 ;; example 1
 

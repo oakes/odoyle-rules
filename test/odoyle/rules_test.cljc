@@ -4,6 +4,7 @@
             [clojure.spec.test.alpha :as st]))
 
 (st/instrument)
+(st/unstrument 'odoyle.rules/insert)
 
 (deftest num-of-conditions-not=-num-of-facts
   (-> (reduce o/add-rule (o/->session)

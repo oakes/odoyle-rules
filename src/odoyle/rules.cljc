@@ -676,11 +676,15 @@
   ([[attr value]]
    (check-insert-spec attr value))
   ([attr value]
-   (when-let [spec (s/get-spec attr)]
+   (if-let [spec (s/get-spec attr)]
      (when (= ::s/invalid (s/conform spec value))
        (throw (ex-info (str "Error when checking attribute " attr "\n\n"
                             (expound/expound-str spec value))
-                       {}))))))
+                       {})))
+     (throw (ex-info (str "Couldn't find spec with name " attr \newline
+                          "If you don't want o'doyle to require specs for attributes, call" \newline
+                          "(clojure.spec.test.alpha/unstrument 'odoyle.rules/insert)" \newline)
+                     {})))))
 
 (def ^:private insert-conformer
   (s/conformer
@@ -717,7 +721,7 @@
                    :value ::value)))
 
 (s/fdef insert!
-  :args (s/and ::insert!-args insert-conformer))
+  :args ::insert!-args)
 
 (defn insert!
   "Equivalent to:
