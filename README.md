@@ -94,12 +94,24 @@ Now imagine you want to make the player move to the right every time the frame i
      [:what
       [::time ::total tt]
       :then
+      (o/insert! ::player ::x tt)]}))
+```
+
+As an aside, you can also insert from inside a rule like this:
+
+```clj
+(def rules
+  (o/ruleset
+    {::move-player
+     [:what
+      [::time ::total tt]
+      :then
       (-> o/*session*
           (o/insert ::player ::x tt)
           o/reset!)]}))
 ```
 
-The `*session*` dynamic var will have the current value of the session, and `reset!` will update it so it has the newly-inserted value.
+The `*session*` dynamic var will have the current value of the session, and `reset!` will update it so it has the newly-inserted value. This is nice if you want to thread a lot of calls together, or if you want to write code that works the same both inside and outside of the rule.
 
 ## Queries
 
@@ -112,9 +124,7 @@ Updating the player's `::x` attribute isn't useful unless we can get the value e
      [:what
       [::time ::total tt]
       :then
-      (-> o/*session*
-          (o/insert ::player ::x tt)
-          o/reset!)]
+      (o/insert! ::player ::x tt)]
 
      ::player
      [:what
@@ -153,9 +163,7 @@ Imagine you want to move the player's position based on its current position. So
       [::time ::delta dt]
       [::player ::x x {:then false}] ;; don't run the :then block if only this is updated!
       :then
-      (-> o/*session*
-          (o/insert ::player ::x (+ x dt))
-          o/reset!)]}))
+      (o/insert! ::player ::x (+ x dt))]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules)
@@ -197,9 +205,7 @@ Then we make the rule:
  [::window ::width window-width]
  :then
  (when (> x window-width)
-   (-> o/*session*
-       (o/insert ::player ::x window-width)
-       o/reset!))]
+   (o/insert! ::player ::x window-width))]
 ```
 
 Notice that we *don't* need `{:then false}` this time, because the condition is preventing the rule from re-firing.
@@ -214,9 +220,7 @@ While the above code works, you can also put your condition in a special `:when`
  :when
  (> x window-width)
  :then
- (-> o/*session*
-     (o/insert ::player ::x window-width)
-     o/reset!)]
+ (o/insert! ::player ::x window-width)]
 ```
 
 You can add as many conditions as you want, and they will implicitly work as if they were combined together with `and`:
@@ -230,9 +234,7 @@ You can add as many conditions as you want, and they will implicitly work as if 
  (> x window-width)
  (pos? window-width)
  :then
- (-> o/*session*
-     (o/insert ::player ::x window-width)
-     o/reset!)]
+ (o/insert! ::player ::x window-width)]
 ```
 
 Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
@@ -459,9 +461,7 @@ In any non-trivial project, you'll end up with a lot of rules that share some co
        [id ::x x {:then false}]
        [id ::y y {:then false}]
        :then
-       (-> o/*session*
-           (o/insert id {::x (+ x dt) ::y (+ y dt)})
-           o/reset!)]}))
+       (o/insert! id {::x (+ x dt) ::y (+ y dt)})]}))
 ```
 
 Here we have a `::character` rule whose only purpose is for queries, and a `::move-character` rule that modifies it when the timestamp is updated. In both cases, there is a join on the `id` binding. Joins are not free -- they have a runtime cost, and in this case, that cost is paid twice.
@@ -478,18 +478,14 @@ It turns out that a feature we've already discussed can solve this: derived fact
       [id ::x x]
       [id ::y y]
       :then
-      (-> o/*session*
-          (o/insert id ::character o/*match*)
-          o/reset!)]
+      (o/insert! id ::character o/*match*)]
 
       ::move-character
       [:what
        [::time ::delta dt]
        [id ::character ch {:then false}]
        :then
-       (-> o/*session*
-           (o/insert id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})
-           o/reset!)]}))
+       (o/insert! id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})]}))
 ```
 
 With `*match*` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.

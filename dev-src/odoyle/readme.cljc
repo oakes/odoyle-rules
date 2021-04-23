@@ -34,9 +34,7 @@
      [:what
       [::time ::total tt]
       :then
-      (-> o/*session*
-          (o/insert ::player ::x tt)
-          o/reset!)]}))
+      (o/insert! ::player ::x tt)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-2)
@@ -79,9 +77,7 @@
       [::time ::delta dt]
       [::player ::x x {:then false}]
       :then
-      (-> o/*session*
-          (o/insert ::player ::x (+ x dt))
-          o/reset!)]}))
+      (o/insert! ::player ::x (+ x dt))]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-4)
@@ -113,9 +109,7 @@
       :when
       (> x window-width)
       :then
-      (-> o/*session*
-          (o/insert ::player ::x window-width)
-          o/reset!)]}))
+      (o/insert! ::player ::x window-width)]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-5)
@@ -331,18 +325,14 @@
       [id ::x x]
       [id ::y y]
       :then
-      (-> o/*session*
-          (o/insert id ::character o/*match*)
-          o/reset!)]
+      (o/insert! id ::character o/*match*)]
 
       ::move-character
       [:what
        [::time ::delta dt]
        [id ::character ch {:then false}]
        :then
-       (-> o/*session*
-           (o/insert id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})
-           o/reset!)]}))
+       (o/insert! id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-11)
