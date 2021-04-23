@@ -534,9 +534,9 @@ should satisfy
   pos?
 ```
 
-Note that as of the latest version, O'Doyle will throw an error if spec is instrumented and you try to insert an attribute that doesn't have a cooresponding spec defined. Even if you define the specs without any specificity (i.e. `any?`) this can still help to prevent typos, including the common mistake of inserting attributes with the wrong namespace qualification.
+Note that as of the latest version, O'Doyle will throw an error if spec is instrumented and you try to insert an attribute that doesn't have a corresponding spec defined. Even if you are lazy and define all your specs as `any?`, this can still help to prevent typos, including the common mistake of inserting attributes with the wrong namespace qualification.
 
-If you do *not* want O'Doyle to force attributes to all have specs defined, just call `(clojure.spec.test.alpha/unstrument 'odoyle.rules/insert)`.
+If you do *not* want O'Doyle to force attributes to all have specs defined, just call `(clojure.spec.test.alpha/unstrument 'odoyle.rules/insert)` after your `instrument` call.
 
 ## Development
 
