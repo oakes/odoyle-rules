@@ -4,8 +4,16 @@
             [clojure.spec.test.alpha :as st]
             [#?(:clj clojure.edn :cljs cljs.reader) :as edn]))
 
+(s/def ::total number?)
+(s/def ::delta number?)
+(s/def ::x number?)
+(s/def ::y number?)
+(s/def ::width (s/and number? pos?))
+(s/def ::height (s/and number? pos?))
+(s/def ::character (s/keys :req-un [::x ::y]))
+(s/def ::all-characters (s/coll-of ::character))
+(s/def ::characters-within-window ::all-characters)
 (st/instrument)
-(st/unstrument 'odoyle.rules/insert)
 
 ;; example 1
 
@@ -299,11 +307,6 @@
       (reduce o/insert session facts))))
 
 ;; example 10
-
-(s/def ::x number?)
-(s/def ::y number?)
-(s/def ::width (s/and number? pos?))
-(s/def ::height (s/and number? pos?))
 
 (reset! *session (reduce o/add-rule (o/->session) rules-6))
 
