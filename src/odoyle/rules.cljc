@@ -30,6 +30,15 @@
 
 (s/def ::rules (s/map-of qualified-keyword? ::rule))
 
+(s/def ::dynamic-when-block (s/cat :header #{:when} :body fn?))
+(s/def ::dynamic-then-block (s/cat :header #{:then} :body fn?))
+(s/def ::dynamic-then-finally-block (s/cat :header #{:then-finally} :body fn?))
+(s/def ::dynamic-rule (s/cat
+                        :what-block ::what-block
+                        :when-block (s/? ::dynamic-when-block)
+                        :then-block (s/? ::dynamic-then-block)
+                        :then-finally-block (s/? ::dynamic-then-finally-block)))
+
 (defn parse [spec content]
   (let [res (s/conform spec content)]
     (if (= ::s/invalid res)
@@ -113,31 +122,39 @@
       (add-to-condition :attr attr)
       (add-to-condition :value value)))
 
-(defn ->rule [[rule-name rule]]
-  (let [{:keys [what-block when-block then-block then-finally-block]} rule
-        conditions (mapv ->condition (:body what-block))
-        when-body (:body when-block)
-        when-body (if (> (count when-body) 1)
-                    (cons 'and when-body)
-                    (first when-body))
-        then-body (:body then-block)
-        then-finally-body (:body then-finally-block)
-        syms (->> conditions
-                  (mapcat :bindings)
-                  (map :sym)
-                  (map last) ;; must do this because we quoted it above
-                  (filter simple-symbol?) ;; exclude qualified bindings from destructuring
-                  set
-                  vec)]
-    {:rule-name rule-name
-     :fn-name (-> (str (namespace rule-name) "-" (name rule-name))
-                  (str/replace "." "-")
-                  symbol)
-     :conditions conditions
-     :arg {:keys syms}
-     :when-body when-body
-     :then-body then-body
-     :then-finally-body then-finally-body}))
+(defn ->rule
+  "Returns a new rule. In most cases, you should use the `ruleset` macro to create rules.
+  But if you want to make rules dynamically, you can use this function instead.
+  The one-argument arity is only meant for internal use."
+  ([rule-name rule]
+   (let [{:keys [rule-name conditions when-body then-body then-finally-body]}
+         (->rule [rule-name (parse ::dynamic-rule rule)])]
+     (->Rule rule-name (mapv map->Condition conditions) when-body then-body then-finally-body)))
+  ([[rule-name parsed-rule]]
+   (let [{:keys [what-block when-block then-block then-finally-block]} parsed-rule
+         conditions (mapv ->condition (:body what-block))
+         when-body (:body when-block)
+         then-body (:body then-block)
+         then-finally-body (:body then-finally-block)
+         syms (->> conditions
+                   (mapcat :bindings)
+                   (map :sym)
+                   (map last) ;; must do this because we quoted it above
+                   (filter simple-symbol?) ;; exclude qualified bindings from destructuring
+                   set
+                   vec)]
+     {:rule-name rule-name
+      :fn-name (-> (str (namespace rule-name) "-" (name rule-name))
+                   (str/replace "." "-")
+                   symbol)
+      :conditions conditions
+      :arg {:keys syms}
+      :when-body (cond
+                   (fn? when-body) when-body
+                   (> (count when-body) 1) (cons 'and when-body)
+                   :else (first when-body))
+      :then-body then-body
+      :then-finally-body then-finally-body})))
 
 (defn- add-alpha-node [node new-nodes *alpha-node-path]
   (let [[new-node & other-nodes] new-nodes]

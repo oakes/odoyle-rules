@@ -827,3 +827,32 @@
            (is (= 3 @*count))
            session)))))
 
+(deftest dynamic-rule
+  (let [*then-count (atom 0)
+        *then-finally-count (atom 0)]
+    (-> (o/add-rule
+          (o/->session)
+          (o/->rule
+            ::player
+            [:what
+             '[id :player/x x]
+             '[id :player/y y]
+             :when
+             (fn [{:keys [x y] :as match}]
+               (and (pos? x) (pos? y)))
+             :then
+             (fn [{:keys [id] :as match}]
+               (swap! *then-count inc))
+             :then-finally
+             (fn []
+               (swap! *then-finally-count inc))]))
+        (o/insert 1 {:player/x 3 :player/y 1})
+        (o/insert 2 {:player/x 5 :player/y 2})
+        (o/insert 3 {:player/x 7 :player/y -1})
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 (count (o/query-all session ::player))))
+           (is (= 2 @*then-count))
+           (is (= 1 @*then-finally-count))
+           session)))))
+
