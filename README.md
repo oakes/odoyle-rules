@@ -27,6 +27,7 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
   - [Serializing a session](#serializing-a-session)
   - [Performance](#performance)
   - [Spec integration](#spec-integration)
+  - [Defining rules dynamically](#defining-rules-dynamically)
   - [Development](#development)
   - [Acknowledgements](#acknowledgements)
 
@@ -533,6 +534,64 @@ should satisfy
 Note that as of the latest version, O'Doyle will throw an error if spec is instrumented and you try to insert an attribute that doesn't have a corresponding spec defined. Even if you are lazy and define all your specs as `any?`, this can still help to prevent typos, including the common mistake of inserting attributes with the wrong namespace qualification.
 
 If you do *not* want O'Doyle to force attributes to all have specs defined, just call `(clojure.spec.test.alpha/unstrument 'odoyle.rules/insert)` after your `instrument` call.
+
+## Defining rules dynamically
+
+The `ruleset` macro gives a clean and convenient way to define rules, but it comes with the same downside that all macros have: It runs at compile time, so you can't use it to define rules "dynamically". You may want to define rules whose `:what` block is determined by information at runtime.
+
+To do this, you can instead use the `->rule` function:
+
+```clojure
+(def rule
+  (o/->rule
+    ::character
+    [:what
+     '[id ::x x]
+     '[id ::y y]
+     :when
+     (fn [{:keys [x y] :as match}]
+       (and (pos? x) (pos? y)))
+     :then
+     (fn [match]
+       (println "This will fire twice"))
+     :then-finally
+     (fn []
+       (println "This will fire once"))]))
+
+(-> (o/add-rule (o/->session) rule)
+    (o/insert 1 {::x 3 ::y 1})
+    (o/insert 2 {::x 5 ::y 2})
+    (o/insert 3 {::x 7 ::y -1})
+    o/fire-rules
+    (o/query-all ::character)
+    println)
+;; => [{:id 1, :x 3, :y 1} {:id 2, :x 5, :y 2}]
+```
+
+As you can see, the syntax is a bit more verbose because you need to make the `fn`s explicitly. The advantage, though, is that you are no longer using a macro, so you have an opportunity to modify the `:what` block at runtime.
+
+For example, you may want to create getter rules for a variety of different things that differ only in their id. With the `ruleset` macro, this would probably lead to a lot of duplication. Instead, you can define a function that returns a rule:
+
+```clojure
+(defn ->character-rule [id]
+  (o/->rule id
+    [:what
+     [id ::x 'x]
+     [id ::y 'y]]))
+
+(reset! *session
+  (-> (o/->session)
+      (o/add-rule (->character-rule ::player))
+      (o/add-rule (->character-rule ::enemy))
+      (o/insert ::player {::x 20 ::y 15})
+      (o/insert ::enemy {::x 5 ::y 5})
+      o/fire-rules))
+
+(println (first (o/query-all @*session ::player)))
+;; => {:x 20, :y 15}
+(println (first (o/query-all @*session ::enemy)))
+;; => {:x 5, :y 5}
+```
 
 ## Development
 

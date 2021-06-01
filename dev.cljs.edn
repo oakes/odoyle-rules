@@ -1,5 +1,7 @@
 ^{:open-url "http://localhost:9500"
-  :clean-outputs true}
+  :clean-outputs true
+  ;; don't watch dev-src/public or figwheel will get into an infinite loop
+  :watch-dirs ["src" "dev-src/odoyle"]}
 {:main          odoyle.readme
  :optimizations :none
  :output-to     "dev-src/public/main.js"

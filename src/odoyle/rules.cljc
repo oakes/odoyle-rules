@@ -123,8 +123,9 @@
       (add-to-condition :value value)))
 
 (defn ->rule
-  "Returns a new rule. In most cases, you should use the `ruleset` macro to create rules.
-  But if you want to make rules dynamically, you can use this function instead.
+  "Returns a new rule. In most cases, you should use the `ruleset` macro to define rules,
+  but if you want to define rules dynamically, you can use this function instead.
+  See the README section \"Defining rules dynamically\".
   The one-argument arity is only meant for internal use."
   ([rule-name rule]
    (let [{:keys [rule-name conditions when-body then-body then-finally-body]}
@@ -743,9 +744,7 @@
 (defn insert!
   "Equivalent to:
   
-  (o/reset! (o/insert o/*session* id attr value))
-  
-  Using the long form is recommended."
+  (o/reset! (o/insert o/*session* id attr value))"
   ([id attr->value]
    (run! (fn [[attr value]]
            (insert! id attr value))
@@ -782,9 +781,7 @@
 (defn retract!
   "Equivalent to:
   
-  (o/reset! (o/retract o/*session* id attr))
-  
-  Using the long form is recommended."
+  (o/reset! (o/retract o/*session* id attr))"
   [id attr]
   (if *mutable-session*
     (vswap! *mutable-session* retract id attr)
