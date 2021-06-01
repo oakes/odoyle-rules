@@ -6,6 +6,7 @@
   (:require-macros [dynadoc.example :refer [defexamples]]))
 
 (st/instrument)
+(st/unstrument 'odoyle.rules/insert)
 
 (def rules
   (o/ruleset
