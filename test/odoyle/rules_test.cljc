@@ -835,8 +835,8 @@
           (o/->rule
             ::player
             [:what
-             '[id :player/x x]
-             '[id :player/y y]
+             ['id :player/x 'x {:then not=}]
+             ['id :player/y 'y {:then not=}]
              :when
              (fn [{:keys [x y] :as match}]
                (and (pos? x) (pos? y)))
@@ -849,6 +849,8 @@
         (o/insert 1 {:player/x 3 :player/y 1})
         (o/insert 2 {:player/x 5 :player/y 2})
         (o/insert 3 {:player/x 7 :player/y -1})
+        o/fire-rules
+        (o/insert 1 {:player/x 3 :player/y 1})
         o/fire-rules
         ((fn [session]
            (is (= 2 (count (o/query-all session ::player))))

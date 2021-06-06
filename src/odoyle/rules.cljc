@@ -14,7 +14,7 @@
 (s/def ::what-id (s/or :binding symbol? :value ::id))
 (s/def ::what-attr (s/or :value ::attr))
 (s/def ::what-value (s/or :binding symbol? :value ::value))
-(s/def ::then (s/or :bool boolean? :func symbol?))
+(s/def ::then (s/or :bool boolean? :func #(or (symbol? %) (fn? %))))
 (s/def ::what-opts (s/keys :opt-un [::then]))
 (s/def ::what-tuple (s/cat :id ::what-id, :attr ::what-attr, :value ::what-value, :opts (s/? ::what-opts)))
 (s/def ::what-block (s/cat :header #{:what} :body (s/+ (s/spec ::what-tuple))))
