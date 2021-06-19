@@ -925,3 +925,16 @@
            (is (= 2 @*count-2))
            session)))))
 
+(deftest contains
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::num-conds-and-facts
+           [:what
+            [b ::color "blue"]]}))
+      (o/insert ::bob ::color "blue")
+      o/fire-rules
+      ((fn [session]
+         (is (o/contains? session ::bob ::color))
+         (is (not (o/contains? session ::yair ::color)))
+         session))))
+

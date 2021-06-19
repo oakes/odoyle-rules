@@ -4,7 +4,7 @@
             [clojure.string :as str])
   #?(:cljs
       (:require-macros [odoyle.rules :refer [ruleset]]))
-  (:refer-clojure :exclude [reset!]))
+  (:refer-clojure :exclude [reset! contains?]))
 
 ;; parsing
 
@@ -230,7 +230,7 @@
         (update :bindings (fn [bindings]
                             (reduce
                               (fn [bindings k]
-                                (if (contains? (:all bindings) k)
+                                (if (clojure.core/contains? (:all bindings) k)
                                   (update bindings :joins conj k)
                                   (update bindings :all conj k)))
                               (or bindings
@@ -243,14 +243,14 @@
       (let [var-key (:key cond-var)]
         (case (:field cond-var)
           :id
-          (if (and (contains? m var-key)
+          (if (and (clojure.core/contains? m var-key)
                    (not= (get m var-key) (:id fact)))
             (reduced nil)
             (assoc m var-key (:id fact)))
           :attr
           (throw (ex-info "Attributes cannot contain vars" {}))
           :value
-          (if (and (contains? m var-key)
+          (if (and (clojure.core/contains? m var-key)
                    (not= (get m var-key) (:value fact)))
             (reduced nil)
             (assoc m var-key (:value fact))))))
@@ -286,7 +286,7 @@
      (let [id+attr (get-id-attr alpha-fact)
            id+attrs (conj id+attrs id+attr)
            new-token (->Token alpha-fact (:kind token) nil)
-           new? (not (contains? (:old-id-attrs join-node) id+attr))]
+           new? (not (clojure.core/contains? (:old-id-attrs join-node) id+attr))]
        (left-activate-memory-node session (:child-id join-node) id+attrs new-vars new-token new?))
      session)))
 
@@ -377,7 +377,7 @@
                 (update-in [:id-attr-nodes id+attr]
                            (fn [node-paths]
                              (let [node-paths (or node-paths #{})]
-                               (assert (not (contains? node-paths node-path)))
+                               (assert (not (clojure.core/contains? node-paths node-path)))
                                (conj node-paths node-path)))))
             :retract
             (-> $
@@ -385,7 +385,7 @@
                 (update :id-attr-nodes
                         (fn [nodes]
                           (let [node-paths (get nodes id+attr)
-                                _ (assert (contains? node-paths node-path))
+                                _ (assert (clojure.core/contains? node-paths node-path))
                                 node-paths (disj node-paths node-path)]
                             (if (seq node-paths)
                               (assoc nodes id+attr node-paths)
@@ -433,7 +433,7 @@
             ;; retract any facts from nodes that the new fact wasn't inserted in
             (reduce
               (fn [session node-path]
-                (if (not (contains? node-paths node-path))
+                (if (not (clojure.core/contains? node-paths node-path))
                   (let [node (get-in session node-path)
                         old-fact (get-in node [:facts id attr])]
                     (assert old-fact)
@@ -444,7 +444,7 @@
             ;; update or insert facts, depending on whether the node already exists
             (reduce
               (fn [session node-path]
-                (if (contains? existing-node-paths node-path)
+                (if (clojure.core/contains? existing-node-paths node-path)
                   (let [node (get-in session node-path)
                         old-fact (get-in node [:facts id attr])]
                     (assert old-fact)
@@ -477,7 +477,7 @@
                       (reverse executed-nodes))
         ;; find all rules that execute themselves (directly or indirectly)
         find-cycles (fn find-cycles [cycles [k v] cyc]
-                      (if (contains? (set cyc) k)
+                      (if (clojure.core/contains? (set cyc) k)
                         (conj cycles (vec (drop-while #(not= % k) (conj cyc k))))
                         (reduce
                           (fn [cycles pair]
@@ -621,15 +621,16 @@
                                        (assoc join-node
                                               :id-key (some (fn [{:keys [field key]}]
                                                               (when (and (= :id field)
-                                                                         (contains? (:joins bindings) key))
+                                                                         (clojure.core/contains? (:joins bindings) key))
                                                                 key))
                                                             (-> join-node :condition :bindings))
                                               ;; disable fast updates for facts whose value is part of a join
-                                              :disable-fast-updates (contains? (:joins bindings)
-                                                                               (some (fn [{:keys [field key]}]
-                                                                                       (when (= :value field)
-                                                                                         key))
-                                                                                     (-> join-node :condition :bindings)))))))
+                                              :disable-fast-updates (clojure.core/contains?
+                                                                      (:joins bindings)
+                                                                      (some (fn [{:keys [field key]}]
+                                                                              (when (= :value field)
+                                                                                key))
+                                                                            (-> join-node :condition :bindings)))))))
                         session
                         (:join-node-ids session))]
     (-> session
@@ -755,9 +756,7 @@
      (throw (ex-info "This function must be called in a :then or :then-finally block" {})))))
 
 (s/fdef retract
-  :args (s/cat :session ::session
-               :id ::id
-               :attr ::attr))
+  :args (s/cat :session ::session, :id ::id, :attr ::attr))
 
 (defn retract
   "Retracts the fact with the given id + attr combo."
@@ -775,8 +774,7 @@
       node-paths)))
 
 (s/fdef retract!
-  :args (s/cat :id ::id
-               :attr ::attr))
+  :args (s/cat :id ::id, :attr ::attr))
 
 (defn retract!
   "Equivalent to:
@@ -788,8 +786,7 @@
     (throw (ex-info "This function must be called in a :then or :then-finally block" {}))))
 
 (s/fdef query-all
-  :args (s/cat :session ::session
-               :rule-name (s/? qualified-keyword?)))
+  :args (s/cat :session ::session, :rule-name (s/? qualified-keyword?)))
 
 (defn query-all
   "When called with just a session, returns a vector of all inserted facts.
@@ -812,6 +809,9 @@
        []
        (:matches rule)))))
 
+(s/fdef reset!
+  :args (s/cat :new-session ::session))
+
 (defn reset!
   "Mutates the session from a :then or :then-finally block."
   [new-session]
@@ -820,4 +820,12 @@
       (vreset! *mutable-session* new-session)
       (throw (ex-info "You may only call `reset!` once in a :then or :then-finally block" {})))
     (throw (ex-info "You may only call `reset!` in a :then or :then-finally block" {}))))
+
+(s/fdef contains?
+  :args (s/cat :session ::session, :id ::id, :attr ::attr))
+
+(defn contains?
+  "Returns true if the session contains a fact with the given id and attribute."
+  [session id attr]
+  (clojure.core/contains? (:id-attr-nodes session) [id attr]))
 
