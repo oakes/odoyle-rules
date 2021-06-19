@@ -858,3 +858,70 @@
            (is (= 1 @*then-finally-count))
            session)))))
 
+;; this is a demonstration of how literal values can cause a rule to fire
+;; more often than when a binding is used. the technical reason is that
+;; literal values are checked earlier on (in the alpha network).
+;; when the value changes and then returns to its original value,
+;; the entire match is retracted and then re-inserted, causing the rule to fire
+;; despite the {:then false} usage.
+;; with bindings, this is usually an in-place update, and the match is never
+;; fully retracted, so it doesn't need to fire the rule again.
+;; this difference in behavior isn't ideal but for now i can't think of a nice fix...
+(deftest literal-values-with-then-option-can-cause-extra-rule-firings
+  (let [*count-1 (atom 0)
+        *count-2 (atom 0)
+        ruleset-1 (o/ruleset
+                    {::rule1
+                     [:what
+                      [id ::retired retired {:then false}] ;; value is a binding
+                      [id ::age age]
+                      :when
+                      (not retired)
+                      :then
+                      (swap! *count-1 inc)]
+                     
+                     ::rule2
+                     [:what
+                      [id ::age age]
+                      :then
+                      (o/insert! id ::retired true)]
+                     
+                     ::rule3
+                     [:what
+                      [id ::retired true]
+                      :then
+                      (o/insert! id ::retired false)]})
+        ruleset-2 (o/ruleset
+                    {::rule1
+                     [:what
+                      [id ::retired false {:then false}] ;; value is a literal
+                      [id ::age age]
+                      :then
+                      (swap! *count-2 inc)]
+                     
+                     ::rule2
+                     [:what
+                      [id ::age age]
+                      :then
+                      (o/insert! id ::retired true)]
+                     
+                     ::rule3
+                     [:what
+                      [id ::retired true]
+                      :then
+                      (o/insert! id ::retired false)]})
+        session-1 (reduce o/add-rule (o/->session) ruleset-1)
+        session-2 (reduce o/add-rule (o/->session) ruleset-2)]
+    (-> session-1
+        (o/insert ::bob {::retired false ::age 50})
+        o/fire-rules
+        ((fn [session]
+           (is (= 1 @*count-1))
+           session)))
+    (-> session-2
+        (o/insert ::bob {::retired false ::age 50})
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 @*count-2))
+           session)))))
+
