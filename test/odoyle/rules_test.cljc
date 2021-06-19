@@ -932,9 +932,11 @@
            [:what
             [b ::color "blue"]]}))
       (o/insert ::bob ::color "blue")
-      o/fire-rules
       ((fn [session]
          (is (o/contains? session ::bob ::color))
-         (is (not (o/contains? session ::yair ::color)))
+         session))
+      (o/retract ::bob ::color)
+      ((fn [session]
+         (is (not (o/contains? session ::bob ::color)))
          session))))
 
