@@ -104,6 +104,7 @@
                     id-attr-nodes ;; map of id+attr -> set of alpha node paths
                     then-queue ;; set of (MemoryNode id, id+attrs) that need executed
                     then-finally-queue ;; set of MemoryNode ids that need executed
+                    priority-map ;; :then and :then-finally order of execution
                     ])
 
 (defn- add-to-condition [condition field [kind value]]
@@ -533,8 +534,9 @@
   ([session]
    (fire-rules session {}))
   ([session opts]
-   (let [then-queue (:then-queue session)
-         then-finally-queue (:then-finally-queue session)]
+   (let [{:keys [priority-map node-id->rule-name]} session
+         then-queue (sort-by #(->> % first (get node-id->rule-name) (get priority-map)) (:then-queue session))
+         then-finally-queue (sort-by #(->> %  (get node-id->rule-name) (get priority-map)) (:then-finally-queue session))]
      (if (and (or (seq then-queue) (seq then-finally-queue))
               ;; don't fire while inside a rule
               (nil? *session*))
@@ -661,21 +663,24 @@
 
 (defn ->session
   "Returns a new session."
-  []
-  (map->Session
-    {:alpha-node (map->AlphaNode {:path nil
-                                  :test-field nil
-                                  :test-value nil
-                                  :children []
-                                  :successors []
-                                  :facts {}})
-     :beta-nodes {}
-     :last-id -1
-     :rule-name->node-id {}
-     :node-id->rule-name {}
-     :id-attr-nodes {}
-     :then-queue #{}
-     :then-finally-queue #{}}))
+  ([]
+   (->session {}))
+  ([priority-map]
+   (map->Session
+     {:alpha-node (map->AlphaNode {:path nil
+                                   :test-field nil
+                                   :test-value nil
+                                   :children []
+                                   :successors []
+                                   :facts {}})
+      :beta-nodes {}
+      :last-id -1
+      :rule-name->node-id {}
+      :node-id->rule-name {}
+      :id-attr-nodes {}
+      :then-queue #{}
+      :then-finally-queue #{}
+      :priority-map priority-map})))
 
 (s/def ::session #(instance? Session %))
 
