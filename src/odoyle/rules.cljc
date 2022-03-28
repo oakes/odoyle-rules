@@ -594,6 +594,10 @@
            (fire-rules session opts)))
        session))))
 
+(s/fdef add-rule
+  :args (s/cat :session ::session
+               :rule #(instance? Rule %)))
+
 (defn add-rule
   "Adds a rule to the given session."
   [session rule]
