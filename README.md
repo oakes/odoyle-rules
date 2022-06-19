@@ -182,6 +182,26 @@ While `{:then false}` says "this fact should *never* cause this rule to trigger"
 
 Using `{:then not=}` is not a special case; this option can receive *any* function that receives two arguments, the fact's new value and old value. In the example above, that would be the value of `x`. This little feature can be used to write rules that recursively build data structures. See: [Using O'Doyle Rules as a poor man's DataScript](bench-src/todos/README.md).
 
+You should avoid using this feature in `:what` tuples that are part of a join. For example, let's say your rule's `:what` block contains the following:
+
+```clj
+:what
+[foo ::left-of bar {:then not=}]
+[bar ::color color]
+```
+
+If you insert a fact such as `[::alice ::left-of ::bob]` twice, you would expect the second insertion to not trigger the rule due to the `{:then not=}`, but it will. This is because updating a value that is part of a join could affect the validity of the join, so internally they can't update "in place" like usual; the match must be retracted and re-created. As a result, the `not=` condition can't be run; it's as if the match is completely new every time.
+
+The workaround is to remove the join and enforce their equality in the `:when` block like this:
+
+```clj
+:what
+[foo ::left-of bar {:then not=}]
+[baz ::color color]
+:when
+(= bar baz)
+```
+
 ## Conditions
 
 Rules have nice a way of breaking apart your logic into independent units. If we want to prevent the player from moving off the right side of the screen, we could add a condition inside of the `:then` block of `::move-player`, but it's good to get in the habit of making separate rules.
