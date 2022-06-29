@@ -85,3 +85,22 @@ The `::person-owner-link` links `:thing/owner` to `:person/id`. Now, if you inse
 By providing a single id, all related domain entities can be fetched, whether from a database or a service.
 
 
+## Splitting rule sets by namespaces
+
+If you have a number of different rulesets, you can split them by namespaces, and then merge them into a single ruleset.
+
+For example:
+
+```clojure
+(ns app.rules
+  (:require [odoyle.rules :as o]
+            [app.domain-a.rules :as a]
+            [app.domain-b.rules :as b]))
+
+(def base-rules
+  (o/ruleset
+    {::some-rule ...}))
+
+(def ruleset
+  (reduce into [base-rules a/ruleset b/ruleset]))
+```
