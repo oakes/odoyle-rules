@@ -26,7 +26,8 @@ The solution is to use a rule that initializes a `nil` value for `:thing/owner`:
 (o/ruleset
   {#_...
    ::initialize-thing-owner
-   [:what [_ :thing/id id {:then not=}]
+   [:what [_ :thing/id id]
+    :when (not (o/contains? o/*session* id :thing/owner))
     :then (o/insert! id :thing/owner nil)]})
 ```
 
