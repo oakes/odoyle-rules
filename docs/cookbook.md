@@ -33,7 +33,7 @@ The solution is to use a rule that initializes a `nil` value for `:thing/owner`:
 
 The value may not always be nil. It may also often be 0 or another neutral value. Note that `{:then not=}` prevents the rule from firing more than once. (However, if `[id :thing/id id]` is used, this will not work.)
 
-## Loading Data 
+## Build a Query System
 
 Instead of gathering the data required for your rules, shaping it into the form you need it, and inserting it with `o/insert`, you can use rules to make the process automatic.
 
@@ -81,7 +81,9 @@ Suppose that you have `thing/owner` attribute, which is a set of the things a pe
       :then (o/insert! person-id :person/id person-id)]}))
 ```
 
-The `::person-owner-link` links `:thing/owner` to `:person/id`. Now, if you insert a `:thing/id`, not only is the thing fetched, but the related owner.
+The `::person-owner-link` links `:thing/owner` to `:person/id`. The call to `fetch-thing` returns a map with `:thing/owner`. This is inserted into the session.
+
+`::person-owner-link` then fires, inserting a `:person/id`. This in turn triggers `::fetch-person` to query the database for all the `:person` information, and insert it into the session.
 
 By providing a single id, all related domain entities can be fetched, whether from a database or a service.
 
