@@ -45,6 +45,10 @@
       (throw (ex-info (expound/expound-str spec content) {}))
       res)))
 
+(def ^{:dynamic true
+       :doc "Provides the current value of the session from inside a :then or :then-finally block."}
+  *session* nil)
+
 ;; private
 
 (defrecord Fact [id attr value])
@@ -319,7 +323,8 @@
         enabled? (boolean
                    (or (not leaf-node?)
                        (nil? (:when-fn node))
-                       ((:when-fn node) vars)))
+                       (binding [*session* session]
+                         ((:when-fn node) vars))))
         ;; the id+attr of this token is the last one in the vector
         id+attr (peek id+attrs)
         ;; update session
@@ -509,10 +514,6 @@
 (def ^:private ^:dynamic *executed-nodes* nil)
 
 ;; public
-
-(def ^{:dynamic true
-       :doc "Provides the current value of the session from inside a :then or :then-finally block."}
-  *session* nil)
 
 (def ^{:dynamic true
        :doc "Provides a map of all the matched values from inside a :then block."}

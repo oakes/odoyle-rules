@@ -938,5 +938,20 @@
       (o/retract ::bob ::color)
       ((fn [session]
          (is (not (o/contains? session ::bob ::color)))
-         session))))
+         session)))
+  (let [*fired (atom false)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::num-conds-and-facts
+             [:what
+              [b ::color "blue"]
+              :when
+              (o/contains? o/*session* b ::age)
+              :then
+              (reset! *fired true)]}))
+        (o/insert ::bob ::color "blue")
+        o/fire-rules
+        ((fn [session]
+           (is (not @*fired))
+           session)))))
 
