@@ -49,6 +49,10 @@
        :doc "Provides the current value of the session from inside a :then or :then-finally block."}
   *session* nil)
 
+(def ^{:dynamic true
+       :doc "Provides a map of all the matched values from inside a :then block."}
+  *match* nil)
+
 ;; private
 
 (defrecord Fact [id attr value])
@@ -514,10 +518,6 @@
 (def ^:private ^:dynamic *executed-nodes* nil)
 
 ;; public
-
-(def ^{:dynamic true
-       :doc "Provides a map of all the matched values from inside a :then block."}
-  *match* nil)
 
 (s/def ::recursion-limit (s/nilable nat-int?))
 
