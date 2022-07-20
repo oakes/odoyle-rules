@@ -1,12 +1,12 @@
 {:paths ["src"]
  :deps {expound/expound {:mvn/version "0.7.2"}}
- :aliases {:dev {:extra-deps {org.clojure/clojurescript {:mvn/version "1.10.764"}
-                              com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
+ :aliases {:dev {:extra-deps {org.clojure/clojurescript {:mvn/version "1.11.4"}
+                              com.bhauman/figwheel-main {:mvn/version "0.2.18"}}
                  :extra-paths ["dev-src"]
                  :main-opts ["dev.clj"]}
            :docs {:extra-deps {dynadoc/dynadoc {:mvn/version "RELEASE"}
-                               org.clojure/clojurescript {:mvn/version "1.10.764"}
-                               com.bhauman/figwheel-main {:mvn/version "0.2.9"}}
+                               org.clojure/clojurescript {:mvn/version "1.11.4"}
+                               com.bhauman/figwheel-main {:mvn/version "0.2.18"}}
                   :extra-paths ["docs-src"]
                   :main-opts ["docs.clj"]}
            :prod {:extra-deps {leiningen/leiningen {:mvn/version "2.9.0"}}
