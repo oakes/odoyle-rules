@@ -846,3 +846,28 @@ This is no longer necessary, because it is accessible via `match` directly."}
   [session id attr]
   (clojure.core/contains? (:id-attr-nodes session) [id attr]))
 
+(s/fdef wrap-rule
+  :args (s/cat :rule #(instance? Rule %)
+               :rule-fns ::dynamic-rule))
+
+(defn wrap-rule
+  "Wraps the functions of a rule so they can be conveniently intercepted
+  for debugging or other purposes."
+  [rule {when-fn :when, then-fn :then, then-finally-fn :then-finally}]
+  (cond-> rule
+          (and (:when-fn rule) when-fn)
+          (update :when-fn
+                  (fn wrap-when [f]
+                    (fn [session match]
+                      (when-fn f session match))))
+          (and (:then-fn rule) then-fn)
+          (update :then-fn
+                  (fn wrap-then [f]
+                    (fn [session match]
+                      (then-fn f session match))))
+          (and (:then-finally-fn rule) then-finally-fn)
+          (update :then-finally-fn
+                  (fn wrap-then-finally [f]
+                    (fn [session]
+                      (then-finally-fn f session))))))
+

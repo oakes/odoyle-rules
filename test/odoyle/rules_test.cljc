@@ -955,3 +955,47 @@
            (is (not @*fired))
            session)))))
 
+;; this shows how we can intercept all rule fns before they fire
+(deftest rule-fns
+  (let [*when? (atom false)
+        *then? (atom false)
+        *then-finally? (atom false)]
+    (-> (reduce o/add-rule (o/->session)
+          (map (fn [rule]
+                 (o/wrap-rule rule
+                              {:when
+                               (fn [f session match]
+                                 (reset! *when? true)
+                                 (f session match))
+                               :then
+                               (fn [f session match]
+                                 (reset! *then? true)
+                                 (f session match))
+                               :then-finally
+                               (fn [f session]
+                                 (reset! *then-finally? true)
+                                 (f session))}))
+            (o/ruleset
+              {::rule1
+               [:what
+                [b ::color "blue"]
+                [b ::right-of a]
+                :when
+                true
+                :then
+                nil
+                :then-finally
+                nil]
+               ::rule2
+               [:what
+                [b ::color "blue"]
+                [b ::right-of a]]})))
+        (o/insert ::bob ::color "blue")
+        (o/insert ::bob ::right-of ::alice)
+        o/fire-rules
+        ((fn [session]
+           (is @*when?)
+           (is @*then?)
+           (is @*then-finally?)
+           session)))))
+
