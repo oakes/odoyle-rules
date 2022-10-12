@@ -635,19 +635,31 @@ This is no longer necessary, because it is accessible via `match` directly."}
         session (reduce (fn [session join-node-id]
                           (update-in session [:beta-nodes join-node-id]
                                      (fn [join-node]
-                                       (assoc join-node
-                                              :id-key (some (fn [{:keys [field key]}]
-                                                              (when (and (= :id field)
-                                                                         (clojure.core/contains? (:joins bindings) key))
-                                                                key))
-                                                            (-> join-node :condition :bindings))
-                                              ;; disable fast updates for facts whose value is part of a join
-                                              :disable-fast-updates (clojure.core/contains?
-                                                                      (:joins bindings)
-                                                                      (some (fn [{:keys [field key]}]
-                                                                              (when (= :value field)
-                                                                                key))
-                                                                            (-> join-node :condition :bindings)))))))
+                                       (let [joined-key (some (fn [{:keys [field key]}]
+                                                                (when (= :value field)
+                                                                  key))
+                                                              (-> join-node :condition :bindings))
+                                             disable-fast-updates (clojure.core/contains?
+                                                                    (:joins bindings)
+                                                                    joined-key)]
+                                         (when (and disable-fast-updates
+                                                    (-> (get-in session [:beta-nodes (:child-id join-node)])
+                                                        :condition :opts :then first (= :func)))
+                                           (throw (ex-info (str "In " (:name rule) " you are making a join with the symbol `" (symbol joined-key) "`, "
+                                                                "and passing a custom function in the {:then ...} option. This is not allowed due to "
+                                                                "how the implementation works. Luckily, it's easy to fix! Get rid of this join in your :what "
+                                                                "block by giving the symbol a different name, such as `" (symbol (str (name joined-key) 2)) "`, "
+                                                                "and then enforce the join in your :when block like this: " (list '= (symbol joined-key)
+                                                                                                                                  (symbol (str (name joined-key) 2))))
+                                                           {})))
+                                         (assoc join-node
+                                                :id-key (some (fn [{:keys [field key]}]
+                                                                (when (and (= :id field)
+                                                                           (clojure.core/contains? (:joins bindings) key))
+                                                                  key))
+                                                              (-> join-node :condition :bindings))
+                                                ;; disable fast updates for facts whose value is part of a join
+                                                :disable-fast-updates disable-fast-updates)))))
                         session
                         (:join-node-ids session))]
     (-> session

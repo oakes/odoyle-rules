@@ -726,19 +726,20 @@
            (is (= [alice] (:friends charlie))))
          session))))
 
-;; normally, the {:then not=} would be enough to prevent an
-;; infinite loop here. but because the other facts are joined
-;; with the first one via `id`, they too will be updated when
-;; the ::left-of fact is updated. therefore, they must have
-;; {:then false} to prevent the infinite loop from happening.
 (deftest avoid-infinite-loop-when-updating-fact-whose-value-is-joined
   (-> (reduce o/add-rule (o/->session)
         (o/ruleset
           {::rule1
            [:what
-            [b ::left-of id {:then not=}]
-            [id ::color color {:then false}]
-            [id ::height height {:then false}]
+            ;; normally, the `id2` would just be `id`,
+            ;; but since it's using the custom :then function `not=`,
+            ;; we need to give it a different symbol and enforce
+            ;; the join in the :when block instead
+            [b ::left-of id2 {:then not=}]
+            [id ::color color]
+            [id ::height height]
+            :when
+            (= id id2)
             :then
             (o/insert! b ::left-of ::charlie)]}))
       (o/insert ::bob ::left-of ::alice)
@@ -751,7 +752,19 @@
          (is (= ::charlie (-> (o/query-all session ::rule1)
                               first
                               :id)))
-         session))))
+         session)))
+  ;; make sure it correctly throws an error if a join is made in a
+  ;; :what tuple that also uses a custom :then function
+  (is (thrown? Exception
+               (reduce o/add-rule (o/->session)
+                 (o/ruleset
+                   {::rule1
+                    [:what
+                     [b ::left-of id {:then not=}]
+                     [id ::color color]
+                     [id ::height height]
+                     :then
+                     (o/insert! b ::left-of ::charlie)]})))))
 
 (deftest recursion-limit
   (-> (reduce o/add-rule (o/->session)

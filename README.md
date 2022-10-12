@@ -193,7 +193,7 @@ You should avoid using this feature in `:what` tuples that are part of a join. F
 
 If you insert a fact such as `[::alice ::left-of ::bob]` twice, you would expect the second insertion to not trigger the rule due to the `{:then not=}`, but it will. This is because updating a value that is part of a join could affect the validity of the join, so internally they can't update "in place" like usual; the match must be retracted and re-created. As a result, the `not=` condition can't be run; it's as if the match is completely new every time.
 
-The workaround is to remove the join and enforce their equality in the `:when` block like this:
+As of the latest version, adding a rule that does this will throw an exception. The workaround is to remove the join and enforce their equality in the `:when` block like this:
 
 ```clj
 :what
