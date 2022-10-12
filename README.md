@@ -27,6 +27,7 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
   - [Serializing a session](#serializing-a-session)
   - [Performance](#performance)
   - [Spec integration](#spec-integration)
+  - [Debugging](#debugging)
   - [Defining rules dynamically](#defining-rules-dynamically)
   - [Development](#development)
   - [Acknowledgements](#acknowledgements)
@@ -554,6 +555,32 @@ should satisfy
 Note that as of the latest version, O'Doyle will throw an error if spec is instrumented and you try to insert an attribute that doesn't have a corresponding spec defined. Even if you are lazy and define all your specs as `any?`, this can still help to prevent typos, including the common mistake of inserting attributes with the wrong namespace qualification.
 
 If you do *not* want O'Doyle to force attributes to all have specs defined, just call `(clojure.spec.test.alpha/unstrument 'odoyle.rules/insert)` after your `instrument` call.
+
+## Debugging
+
+Debugging rules is very different than debugging normal code. To understand when rules are run, you need to think about when their dependent *data* is inserted, rather than where they are *called* as with normal functions. One easy way to add logging (or other debug code) to all rules is to use `wrap-rule`:
+
+```clojure
+(def session
+  (->> rules
+       (map (fn [rule]
+              (o/wrap-rule rule
+                           {:when
+                            (fn [f session match]
+                              (println :when (:name rule) match)
+                              (f session match))
+                            :then
+                            (fn [f session match]
+                              (println :then (:name rule) match)
+                              (f session match))
+                            :then-finally
+                            (fn [f session]
+                              (println :then-finally (:name rule))
+                              (f session))})))
+       (reduce o/add-rule (o/->session))))
+```
+
+You can find all sorts of creative uses for this. To pause execution before each rule runs, you can call `(read-line)` right after the `println`s, which blocks the thread until enter is pressed. If you want to see the rule firings as a data structure rather than in the logs, like in Clara's [tracing mechanism](https://www.clara-rules.org/docs/listeners/), just make an atom and `swap!` into it each time a rule fires.
 
 ## Defining rules dynamically
 

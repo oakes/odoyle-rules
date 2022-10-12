@@ -308,6 +308,33 @@
 
 ;; example 10
 
+(reset! *session
+  (->> rules-4
+       (map (fn [rule]
+              (o/wrap-rule rule
+                           {:when
+                            (fn [f session match]
+                              (println :when (:name rule) match)
+                              (f session match))
+                            :then
+                            (fn [f session match]
+                              (println :then (:name rule) match)
+                              (f session match))
+                            :then-finally
+                            (fn [f session]
+                              (println :then-finally (:name rule))
+                              (f session))})))
+       (reduce o/add-rule (o/->session))))
+
+(swap! *session
+  (fn [session]
+    (-> session
+        (o/insert ::player {::x 20 ::y 15})
+        (o/insert ::time {::total 100 ::delta 0.1})
+        o/fire-rules)))
+
+;; example 11
+
 (reset! *session (reduce o/add-rule (o/->session) rules-6))
 
 (->
@@ -320,9 +347,9 @@
   #?(:clj (try (catch Exception e (println (.getMessage e))))
      :cljs (try (catch js/Error e (println (.-message e))))))
 
-;; example 11
+;; example 12
 
-(def rules-11
+(def rules-12
   (o/ruleset
     {::character
      [:what
@@ -339,7 +366,7 @@
        (o/insert! id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})]}))
 
 (reset! *session
-  (-> (reduce o/add-rule (o/->session) rules-11)
+  (-> (reduce o/add-rule (o/->session) rules-12)
       (o/insert ::player {::x 20 ::y 15})
       (o/insert ::enemy {::x 5 ::y 5})
       (o/insert ::time ::delta 0.1)
@@ -347,7 +374,7 @@
 
 (println (o/query-all @*session ::character))
 
-;; example 12
+;; example 13
 
 (def rule
   (o/->rule
