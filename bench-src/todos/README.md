@@ -96,9 +96,9 @@ We can do this by creating a derived fact. Here's one way to do it:
      [:what
       [id ::text text]
       :then-finally
-      (->> (o/query-all o/*session* ::todo)       ;; => [{:id 1 :text "Clean the car"} {:id 2 "Wash the windshield"} ,,,]
+      (->> (o/query-all session ::todo)       ;; => [{:id 1 :text "Clean the car"} {:id 2 "Wash the windshield"} ,,,]
            (reduce #(assoc %1 (:id %2) %2) {})    ;; => {1 {:id 1 :text "Clean the car"} 2 {:id 2 "Wash the windshield"} ,,,}
-           (o/insert o/*session* ::todos ::by-id) ;; insert it as a new derived fact
+           (o/insert session ::todos ::by-id) ;; insert it as a new derived fact
            o/reset!)]}))
 ```
 
@@ -117,7 +117,7 @@ Then, we write a rule that receives the `sub-todo-ids` of a todo item, along wit
       [::todos ::by-id id->todo]
       :then                                       ;; when any todo is inserted
       (->> (mapv id->todo sub-todo-ids)           ;; make a vector of its sub-todos
-           (o/insert o/*session* id ::sub-todos)  ;; insert it as a new derived fact
+           (o/insert session id ::sub-todos)  ;; insert it as a new derived fact
            o/reset!)]}))
 ```
 
@@ -133,9 +133,9 @@ Now for the cool part. To make the todos contain their sub-todos, we add one lin
       [id ::text text]
       [id ::sub-todos sub-todos {:then not=}] ;; bring in the sub-todos!
       :then-finally
-      (->> (o/query-all o/*session* ::todo)
+      (->> (o/query-all session ::todo)
            (reduce #(assoc %1 (:id %2) %2) {})
-           (o/insert o/*session* ::todos ::by-id)
+           (o/insert session ::todos ::by-id)
            o/reset!)]
 
      ,,,}))
@@ -221,14 +221,14 @@ In O'Doyle, this just turns into a Clojure problem: How do I convert those `::pa
      [:what
       [id ::parent-id parent-id]
       :then-finally
-      (let [todos (o/query-all o/*session* ::update-sub-todo-ids) ;; => [{:id 2 :parent-id 1} {:id 3 :parent-id 1} ,,,]
+      (let [todos (o/query-all session ::update-sub-todo-ids) ;; => [{:id 2 :parent-id 1} {:id 3 :parent-id 1} ,,,]
             todos-by-parent (group-by :parent-id todos)]          ;; => {1 [{:id 2 :parent-id 1} {:id 3 :parent-id 1}]
         (->> todos                                                ;;     3 [{:id 4 :parent-id 3} {:id 5 :parent-id 3}]
              (reduce                                              ;;     ,,,}
                (fn [session {:keys [id]}]
                  (->> (mapv :id (todos-by-parent id))             ;; => [2 3]
                       (o/insert session id ::sub-todo-ids)))
-               o/*session*)
+               session)
              o/reset!))]}))
 ```
 

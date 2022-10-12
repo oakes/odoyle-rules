@@ -9,9 +9,9 @@
       [id ::core/text text]
       [id ::sub-todos sub-todos {:then not=}]
       :then-finally
-      (->> (o/query-all o/*session* ::todo)
+      (->> (o/query-all session ::todo)
            (reduce #(assoc %1 (:id %2) %2) {})
-           (o/insert o/*session* ::todos ::by-id)
+           (o/insert session ::todos ::by-id)
            o/reset!)]
 
      ::update-sub-todos
@@ -20,7 +20,7 @@
       [::todos ::by-id id->todo]
       :then
       (->> (mapv id->todo sub-todo-ids)
-           (o/insert o/*session* id ::sub-todos)
+           (o/insert session id ::sub-todos)
            o/reset!)]
 
      ::root-todo
@@ -32,13 +32,13 @@
      [:what
       [id ::core/parent-id parent-id]
       :then-finally
-      (let [todos (o/query-all o/*session* ::update-sub-todo-ids)
+      (let [todos (o/query-all session ::update-sub-todo-ids)
             todos-by-parent (group-by :parent-id todos)]
         (->> todos
              (reduce
                (fn [session {:keys [id]}]
                  (o/insert session id ::core/sub-todo-ids (mapv :id (todos-by-parent id))))
-               o/*session*)
+               session)
              o/reset!))]}))
 
 (defn init [session]

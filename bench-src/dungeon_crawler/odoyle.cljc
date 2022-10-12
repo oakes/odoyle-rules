@@ -18,13 +18,13 @@
       :then
       ;; create a derived "all" fact that contains
       ;; all the fields above in a single map
-      (-> o/*session*
+      (-> session
           ;; give the player's "all" fact a unique id
           ;; so it can be easily distinguished when
           ;; pulled into other rules
           (o/insert (if (= kind :player) ::player id)
                     ::all
-                    o/*match*)
+                    match)
           o/reset!)]
      
      ::move-enemy
@@ -39,7 +39,7 @@
       :then
       (let [[xv yv] (move/get-enemy-velocity enemy player distance-from-player)]
         (->> (move/move (:x enemy) (:y enemy) xv yv 0.1 true)
-             (o/insert o/*session* eid)
+             (o/insert session eid)
              o/reset!))]
 
      ::update-distance-from-player
@@ -49,7 +49,7 @@
       :when
       (not= eid ::player)
       :then
-      (-> o/*session*
+      (-> session
           (o/insert eid ::distance-from-player (move/calc-distance (:x player) (:y player) (:x enemy) (:y enemy)))
           o/reset!)]}))
 

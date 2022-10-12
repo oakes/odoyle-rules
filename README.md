@@ -107,12 +107,12 @@ As an aside, you can also insert from inside a rule like this:
      [:what
       [::time ::total tt]
       :then
-      (-> o/*session*
+      (-> session
           (o/insert ::player ::x tt)
           o/reset!)]}))
 ```
 
-The `*session*` dynamic var will have the current value of the session, and `reset!` will update it so it has the newly-inserted value. This is nice if you want to thread a lot of calls together, or if you want to write code that works the same both inside and outside of the rule.
+The `session` will have the current value of the session, and `reset!` will update it so it has the newly-inserted value. This is nice if you want to thread a lot of calls together, or if you want to write code that works the same both inside and outside of the rule.
 
 ## Queries
 
@@ -317,8 +317,8 @@ If you want to create a fact that contains all characters, one clever way to do 
       [id ::x x]
       [id ::y y]
       :then
-      (->> (o/query-all o/*session* ::character)
-           (o/insert o/*session* ::derived ::all-characters)
+      (->> (o/query-all session ::character)
+           (o/insert session ::derived ::all-characters)
            o/reset!)]
 
      ::print-all-characters
@@ -362,8 +362,8 @@ The solution is to use `:then-finally`:
  [id ::x x]
  [id ::y y]
  :then-finally
- (->> (o/query-all o/*session* ::character)
-      (o/insert o/*session* ::derived ::all-characters)
+ (->> (o/query-all session ::character)
+      (o/insert session ::derived ::all-characters)
       o/reset!)]
 ```
 
@@ -395,10 +395,10 @@ Instead, you may be tempted to do this:
       [id ::y y]
       :then-finally
       (let [{:keys [window-width window-height]}
-            (first (o/query-all o/*session* ::window))] ;; warning: this will not be reactive!
-        (->> (o/query-all o/*session* ::character)
+            (first (o/query-all session ::window))] ;; warning: this will not be reactive!
+        (->> (o/query-all session ::character)
              (filterv #(within? % window-width window-height))
-             (o/insert o/*session* ::derived ::characters-within-window)
+             (o/insert session ::derived ::characters-within-window)
              o/reset!))]}))
 ```
 
@@ -414,8 +414,8 @@ The solution, like is often true in software, is to pull things apart that shoul
       [id ::x x]
       [id ::y y]
       :then-finally
-      (->> (o/query-all o/*session* ::character)
-           (o/insert o/*session* ::derived ::all-characters)
+      (->> (o/query-all session ::character)
+           (o/insert session ::derived ::all-characters)
            o/reset!)]
 
      ::characters-within-window
@@ -426,7 +426,7 @@ The solution, like is often true in software, is to pull things apart that shoul
       :then
       (->> all-characters
            (filterv #(within? % window-width window-height))
-           (o/insert o/*session* ::derived ::characters-within-window)
+           (o/insert session ::derived ::characters-within-window)
            o/reset!)]}))
 ```
 
@@ -499,7 +499,7 @@ It turns out that a feature we've already discussed can solve this: derived fact
       [id ::x x]
       [id ::y y]
       :then
-      (o/insert! id ::character o/*match*)]
+      (o/insert! id ::character match)]
 
       ::move-character
       [:what
@@ -509,7 +509,7 @@ It turns out that a feature we've already discussed can solve this: derived fact
        (o/insert! id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})]}))
 ```
 
-With `*match*` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.
+With `match` we can get all the bindings in a convenient map, such as `{:id ::player, :x 10, :y 5}`. We then insert it as a derived fact, and bring it into the `::move-character` rule.
 
 This will be faster because we now are only doing the join once, and all subsequent rules are just using the derived fact. As the number of joined tuples gets larger, the performance difference gets more and more substantial.
 

@@ -62,7 +62,7 @@
      [:what
       [::time ::total tt]
       :then
-      (println "Query from inside rule:" (o/query-all o/*session* ::player))]}))
+      (println "Query from inside rule:" (o/query-all session ::player))]}))
 
 (reset! *session
   (-> (reduce o/add-rule (o/->session) rules-3)
@@ -184,8 +184,8 @@
       [id ::x x]
       [id ::y y]
       :then
-      (->> (o/query-all o/*session* ::character)
-           (o/insert o/*session* ::derived ::all-characters)
+      (->> (o/query-all session ::character)
+           (o/insert session ::derived ::all-characters)
            o/reset!)]
 
      ::print-all-characters
@@ -201,8 +201,8 @@
       [id ::x x]
       [id ::y y]
       :then-finally
-      (->> (o/query-all o/*session* ::character)
-           (o/insert o/*session* ::derived ::all-characters)
+      (->> (o/query-all session ::character)
+           (o/insert session ::derived ::all-characters)
            o/reset!)]
 
      ::print-all-characters
@@ -253,10 +253,10 @@
       [id ::y y]
       :then-finally
       (let [{:keys [window-width window-height]}
-            (first (o/query-all o/*session* ::window))] ;; warning: this will not be reactive!
-        (->> (o/query-all o/*session* ::character)
+            (first (o/query-all session ::window))] ;; warning: this will not be reactive!
+        (->> (o/query-all session ::character)
              (filterv #(within? % window-width window-height))
-             (o/insert o/*session* ::derived ::characters-within-window)
+             (o/insert session ::derived ::characters-within-window)
              o/reset!))]
 
      ::print-characters-within-window
@@ -272,8 +272,8 @@
       [id ::x x]
       [id ::y y]
       :then-finally
-      (->> (o/query-all o/*session* ::character)
-           (o/insert o/*session* ::derived ::all-characters)
+      (->> (o/query-all session ::character)
+           (o/insert session ::derived ::all-characters)
            o/reset!)]
 
      ::characters-within-window
@@ -284,7 +284,7 @@
       :then
       (->> all-characters
            (filterv #(within? % window-width window-height))
-           (o/insert o/*session* ::derived ::characters-within-window)
+           (o/insert session ::derived ::characters-within-window)
            o/reset!)]
 
      ::print-characters-within-window
@@ -329,7 +329,7 @@
       [id ::x x]
       [id ::y y]
       :then
-      (o/insert! id ::character o/*match*)]
+      (o/insert! id ::character match)]
 
       ::move-character
       [:what

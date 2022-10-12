@@ -344,7 +344,7 @@
             [b ::color "blue"]
             [::alice ::color c {:then false}]
             :then
-            (o/reset! (o/insert o/*session* ::alice ::color "maize"))]}))
+            (o/reset! (o/insert session ::alice ::color "maize"))]}))
       (o/insert ::bob ::color "blue")
       (o/insert ::alice ::color "red")
       o/fire-rules
@@ -360,7 +360,7 @@
              [:what
               [b ::color "blue"]
               :then
-              (-> o/*session*
+              (-> session
                   (o/insert ::alice ::color "maize")
                   (o/insert ::charlie ::color "gold")
                   o/reset!)]
@@ -386,12 +386,12 @@
            [:what
             [b ::color "blue"]
             :then
-            (o/reset! (o/insert o/*session* ::charlie ::right-of ::bob))]
+            (o/reset! (o/insert session ::charlie ::right-of ::bob))]
            ::rule2
            [:what
             [c ::right-of b]
             :then
-            (o/reset! (o/insert o/*session* b ::left-of c))]
+            (o/reset! (o/insert session b ::left-of c))]
            ::rule3
            [:what
             [b ::left-of c]]}))
@@ -508,7 +508,7 @@
             :when
             (not= kind :player)
             :then
-            (-> o/*session*
+            (-> session
                 (o/insert eid ::color "green")
                 (o/insert eid ::height 70)
                 o/reset!)]}))
@@ -616,8 +616,8 @@
               [id ::left-of left-of]
               [id ::height height]
               :then-finally
-              (->> (o/query-all o/*session* ::get-person)
-                   (o/insert o/*session* ::people ::all)
+              (->> (o/query-all session ::get-person)
+                   (o/insert session ::people ::all)
                    o/reset!)]
              ::all-people
              [:what
@@ -690,7 +690,7 @@
             [id ::height height]
             [id ::friends friends {:then not=}]
             :then-finally
-            (->> (o/query-all o/*session* ::get-person)
+            (->> (o/query-all session ::get-person)
                  (reduce #(assoc %1 (:id %2) %2) {})
                  (o/insert! ::people ::by-id))]
 
@@ -760,19 +760,19 @@
            [:what
             [::alice ::color c]
             :then
-            (o/reset! (o/insert o/*session* ::alice ::height 15))]
+            (o/reset! (o/insert session ::alice ::height 15))]
            
            ::rule2
            [:what
             [::alice ::height height]
             :then
-            (o/reset! (o/insert o/*session* ::alice ::age 10))]
+            (o/reset! (o/insert session ::alice ::age 10))]
            
            ::rule3
            [:what
             [::alice ::age age]
             :then
-            (o/reset! (-> o/*session*
+            (o/reset! (-> session
                           (o/insert ::alice ::color "maize")
                           (o/insert ::bob ::age 10)))]
            
@@ -780,19 +780,19 @@
            [:what
             [::bob ::age age]
             :then
-            (o/reset! (o/insert o/*session* ::bob ::height 15))]
+            (o/reset! (o/insert session ::bob ::height 15))]
            
            ::rule5
            [:what
             [::bob ::height height]
             :then
-            (o/reset! (o/insert o/*session* ::bob ::age 10))]
+            (o/reset! (o/insert session ::bob ::age 10))]
            
            ::rule6
            [:what
             [::bob ::color c]
             :then
-            (o/reset! (o/insert o/*session* ::bob ::color c))]}))
+            (o/reset! (o/insert session ::bob ::color c))]}))
       (o/insert ::alice ::color "red")
       (o/insert ::bob ::color "blue")
       ((fn [session]
@@ -946,7 +946,7 @@
              [:what
               [b ::color "blue"]
               :when
-              (o/contains? o/*session* b ::age)
+              (o/contains? session b ::age)
               :then
               (reset! *fired true)]}))
         (o/insert ::bob ::color "blue")
