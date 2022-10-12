@@ -30,14 +30,14 @@
 
 (s/def ::rules (s/map-of qualified-keyword? ::rule))
 
-(s/def ::dynamic-when-block (s/cat :header #{:when} :body fn?))
-(s/def ::dynamic-then-block (s/cat :header #{:then} :body fn?))
-(s/def ::dynamic-then-finally-block (s/cat :header #{:then-finally} :body fn?))
-(s/def ::dynamic-rule (s/cat
-                        :what-block ::what-block
-                        :when-block (s/? ::dynamic-when-block)
-                        :then-block (s/? ::dynamic-then-block)
-                        :then-finally-block (s/? ::dynamic-then-finally-block)))
+(s/def :odoyle.rules.dynamic-rule/what (s/+ (s/spec ::what-tuple)))
+(s/def :odoyle.rules.dynamic-rule/when fn?)
+(s/def :odoyle.rules.dynamic-rule/then fn?)
+(s/def :odoyle.rules.dynamic-rule/then-finally fn?)
+(s/def ::dynamic-rule (s/keys :opt-un [:odoyle.rules.dynamic-rule/what
+                                       :odoyle.rules.dynamic-rule/when
+                                       :odoyle.rules.dynamic-rule/then
+                                       :odoyle.rules.dynamic-rule/then-finally]))
 
 (defn parse [spec content]
   (let [res (s/conform spec content)]
@@ -46,11 +46,13 @@
       res)))
 
 (def ^{:dynamic true
-       :doc "Provides the current value of the session from inside a :then or :then-finally block."}
+       :doc "Provides the current value of the session from inside a :then or :then-finally block.
+This is no longer necessary, because it is accessible via `session` directly."}
   *session* nil)
 
 (def ^{:dynamic true
-       :doc "Provides a map of all the matched values from inside a :then block."}
+       :doc "Provides a map of all the matched values from inside a :then block.
+This is no longer necessary, because it is accessible via `match` directly."}
   *match* nil)
 
 ;; private
@@ -136,8 +138,17 @@
   See the README section \"Defining rules dynamically\".
   The one-argument arity is only meant for internal use."
   ([rule-name rule]
-   (let [{:keys [rule-name conditions when-body then-body then-finally-body]}
-         (->rule [rule-name (parse ::dynamic-rule rule)])]
+   (when (vector? rule)
+     (throw (ex-info "The syntax for dynamic rules changed! It now should be a map, and the fns take an extra `session` arg. See the README for more." {})))
+   (let [parsed-rule (parse ::dynamic-rule rule)
+         parsed-rule (cond-> {:what-block {:body (:what parsed-rule)}}
+                             (:when parsed-rule)
+                             (assoc-in [:when-block :body] (:when parsed-rule))
+                             (:then parsed-rule)
+                             (assoc-in [:then-block :body] (:then parsed-rule))
+                             (:then-finally parsed-rule)
+                             (assoc-in [:then-finally-block :body] (:then-finally parsed-rule)))
+         {:keys [rule-name conditions when-body then-body then-finally-body]} (->rule [rule-name parsed-rule])]
      (->Rule rule-name (mapv map->Condition conditions) when-body then-body then-finally-body)))
   ([[rule-name parsed-rule]]
    (let [{:keys [what-block when-block then-block then-finally-block]} parsed-rule
@@ -157,7 +168,7 @@
                    (str/replace "." "-")
                    symbol)
       :conditions conditions
-      :arg {:keys syms}
+      :arg {:keys syms :as 'match}
       :when-body (cond
                    (fn? when-body) when-body
                    (> (count when-body) 1) (cons 'and when-body)
@@ -327,8 +338,9 @@
         enabled? (boolean
                    (or (not leaf-node?)
                        (nil? (:when-fn node))
-                       (binding [*session* session]
-                         ((:when-fn node) vars))))
+                       (binding [*session* session
+                                 *match* vars]
+                         ((:when-fn node) session vars))))
         ;; the id+attr of this token is the last one in the vector
         id+attr (peek id+attrs)
         ;; update session
@@ -567,7 +579,7 @@
                                    (binding [*session* session
                                              *mutable-session* (volatile! session)
                                              *match* vars]
-                                     (execute-fn #(then-fn vars) node-id)
+                                     (execute-fn #(then-fn session vars) node-id)
                                      @*mutable-session*)))
                                session)))
                        session
@@ -578,7 +590,7 @@
                          (let [{:keys [then-finally-fn]} (get beta-nodes node-id)]
                            (binding [*session* session
                                      *mutable-session* (volatile! session)]
-                             (execute-fn then-finally-fn node-id)
+                             (execute-fn #(then-finally-fn session) node-id)
                              @*mutable-session*)))
                        session
                        then-finally-queue)]
@@ -656,11 +668,11 @@
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition ~conditions)
                        ~(when (some? when-body) ;; need some? because it could be `false`
-                          `(fn ~fn-name [~arg] ~when-body))
+                          `(fn ~fn-name [~'session ~arg] ~when-body))
                        ~(when then-body
-                          `(fn ~fn-name [~arg] ~@then-body))
+                          `(fn ~fn-name [~'session ~arg] ~@then-body))
                        ~(when then-finally-body
-                          `(fn ~fn-name [] ~@then-finally-body)))))
+                          `(fn ~fn-name [~'session] ~@then-finally-body)))))
     []
     (mapv ->rule (parse ::rules rules)))))
 

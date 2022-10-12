@@ -834,18 +834,18 @@
           (o/->session)
           (o/->rule
             ::player
-            [:what
-             ['id :player/x 'x {:then not=}]
-             ['id :player/y 'y {:then not=}]
+            {:what
+             [['id :player/x 'x {:then not=}]
+              ['id :player/y 'y {:then not=}]]
              :when
-             (fn [{:keys [x y] :as match}]
+             (fn [session {:keys [x y] :as match}]
                (and (pos? x) (pos? y)))
              :then
-             (fn [{:keys [id] :as match}]
+             (fn [session {:keys [id] :as match}]
                (swap! *then-count inc))
              :then-finally
-             (fn []
-               (swap! *then-finally-count inc))]))
+             (fn [session]
+               (swap! *then-finally-count inc))}))
         (o/insert 1 {:player/x 3 :player/y 1})
         (o/insert 2 {:player/x 5 :player/y 2})
         (o/insert 3 {:player/x 7 :player/y -1})

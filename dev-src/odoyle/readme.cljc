@@ -352,18 +352,18 @@
 (def rule
   (o/->rule
     ::character
-    [:what
-     '[id ::x x]
-     '[id ::y y]
+    {:what
+     '[[id ::x x]
+       [id ::y y]]
      :when
-     (fn [{:keys [x y] :as match}]
+     (fn [session {:keys [x y] :as match}]
        (and (pos? x) (pos? y)))
      :then
-     (fn [match]
+     (fn [session match]
        (println "This will fire twice"))
      :then-finally
-     (fn []
-       (println "This will fire once"))]))
+     (fn [session]
+       (println "This will fire once"))}))
 
 (-> (o/add-rule (o/->session) rule)
     (o/insert 1 {::x 3 ::y 1})
@@ -375,9 +375,9 @@
 
 (defn ->character-rule [id]
   (o/->rule id
-    [:what
-     [id ::x 'x]
-     [id ::y 'y]]))
+    {:what
+     [[id ::x 'x]
+      [id ::y 'y]]}))
 
 (reset! *session
   (-> (o/->session)
