@@ -864,7 +864,8 @@ This is no longer necessary, because it is accessible via `match` directly."}
 
 (defn wrap-rule
   "Wraps the functions of a rule so they can be conveniently intercepted
-  for debugging or other purposes."
+  for debugging or other purposes.
+  See the README section \"Debugging\"."
   [rule {when-fn :when, then-fn :then, then-finally-fn :then-finally}]
   (cond-> rule
           (and (:when-fn rule) when-fn)
