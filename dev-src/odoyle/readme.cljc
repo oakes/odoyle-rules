@@ -312,7 +312,11 @@
   (->> rules-4
        (map (fn [rule]
               (o/wrap-rule rule
-                           {:when
+                           {:what
+                            (fn [f session new-fact old-fact]
+                              (println :what (:name rule) new-fact old-fact)
+                              (f session new-fact old-fact))
+                            :when
                             (fn [f session match]
                               (println :when (:name rule) match)
                               (f session match))

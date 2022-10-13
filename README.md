@@ -565,7 +565,11 @@ Debugging rules is very different than debugging normal code. To understand when
   (->> rules
        (map (fn [rule]
               (o/wrap-rule rule
-                           {:when
+                           {:what
+                            (fn [f session new-fact old-fact]
+                              (println :what (:name rule) new-fact old-fact)
+                              (f session new-fact old-fact))
+                            :when
                             (fn [f session match]
                               (println :when (:name rule) match)
                               (f session match))
@@ -580,7 +584,11 @@ Debugging rules is very different than debugging normal code. To understand when
        (reduce o/add-rule (o/->session))))
 ```
 
+The map that you supply to `wrap-rule` contains functions that will wrap the functions used by this rule, a bit like ring middleware. You can leave out the ones you don't want to intercept. In each one, you must call the supplied function, but you can also add logging or other debug code. In the `:what` and `:when` functions, the return value matters, so make sure the supplied function is called at the end of them!
+
 You can find all sorts of creative uses for this. To pause execution before each rule runs, you can call `(read-line)` right after the `println`s, which blocks the thread until enter is pressed. If you want to see the rule firings as a data structure rather than in the logs, like in Clara's [tracing mechanism](https://www.clara-rules.org/docs/listeners/), just make an atom and `swap!` into it each time a rule fires.
+
+The `:what` function requires a bit of explanation. It runs when each individual fact is received by the rule matching one of the tuples in its `:what` block. Its return value should be a boolean that determines if the fact will be allowed to trigger the `:then` and `:then-finally` functions. By default, it will return `true`, but if you supplied a custom function such as `{:then not=}`, it will run that instead. In short, this function allows you to intercept each individual fact as it arrives and inspect whether or not it triggered the rule.
 
 ## Defining rules dynamically
 

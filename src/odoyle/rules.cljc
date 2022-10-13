@@ -39,6 +39,11 @@
                                        :odoyle.rules.dynamic-rule/then
                                        :odoyle.rules.dynamic-rule/then-finally]))
 
+(s/def :odoyle.rules.wrap-rule/what fn?)
+(s/def ::wrap-rule (s/keys :opt-un [:odoyle.rules.wrap-rule/what
+                                    :odoyle.rules.dynamic-rule/when
+                                    :odoyle.rules.dynamic-rule/then
+                                    :odoyle.rules.dynamic-rule/then-finally]))
 (defn parse [spec content]
   (let [res (s/conform spec content)]
     (if (= ::s/invalid res)
@@ -82,6 +87,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
                        leaf-node-id ;; id of the MemoryNode at the end (same as id if this is the leaf node)
                        condition ;; Condition associated with this node
                        matches ;; map of id+attrs -> Match
+                       what-fn ;; fn
                        when-fn ;; fn
                        then-fn ;; fn
                        then-finally-fn ;; fn
@@ -102,6 +108,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
                       ])
 (defrecord Rule [name ;; keyword
                  conditions ;; vector of Condition
+                 what-fn ;; fn
                  when-fn ;; fn
                  then-fn ;; fn
                  then-finally-fn ;; fn
@@ -149,7 +156,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
                              (:then-finally parsed-rule)
                              (assoc-in [:then-finally-block :body] (:then-finally parsed-rule)))
          {:keys [rule-name conditions when-body then-body then-finally-body]} (->rule [rule-name parsed-rule])]
-     (->Rule rule-name (mapv map->Condition conditions) when-body then-body then-finally-body)))
+     (->Rule rule-name (mapv map->Condition conditions) nil when-body then-body then-finally-body)))
   ([[rule-name parsed-rule]]
    (let [{:keys [what-block when-block then-block then-finally-block]} parsed-rule
          conditions (mapv ->condition (:body what-block))
@@ -319,13 +326,32 @@ This is no longer necessary, because it is accessible via `match` directly."}
         ;; let the leaf node trigger
         session (if (and new?
                          (#{:insert :update} kind)
-                         (if-let [[then-type then] (-> node :condition :opts :then)]
-                           (case then-type
-                             :bool then
-                             :func (if-let [old-fact (:old-fact token)]
-                                     (then (-> token :fact :value) (:value old-fact))
-                                     true))
-                           true))
+                         (if-let [what-fn (:what-fn node)]
+                           ;; if a what fn was supplied via `wrap-rule`,
+                           ;; run it so this fact insertion can be intercepted
+                           (what-fn (if-let [[then-type then] (-> node :condition :opts :then)]
+                                      (case then-type
+                                        :bool (fn [session new-fact old-fact]
+                                                then)
+                                        :func (if-let [old-fact (:old-fact token)]
+                                                (fn [session new-fact old-fact]
+                                                  (then (:value new-fact) (:value old-fact)))
+                                                (fn [session new-fact old-fact]
+                                                  true)))
+                                      (fn [session new-fact old-fact]
+                                        true))
+                                    session
+                                    (:fact token)
+                                    (:old-fact token))
+                           ;; otherwise, just check the :then option to determine if this fact
+                           ;; can trigger the rule
+                           (if-let [[then-type then] (-> node :condition :opts :then)]
+                             (case then-type
+                               :bool then
+                               :func (if-let [old-fact (:old-fact token)]
+                                       (then (-> token :fact :value) (:value old-fact))
+                                       true))
+                             true)))
                   (do
                     (when *triggered-node-ids* ;; this is only used to improve errors. see `fire-rules`
                       (vswap! *triggered-node-ids* conj (:leaf-node-id node)))
@@ -626,7 +652,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
         session (reduce (fn [session mem-node-id]
                           (update-in session [:beta-nodes mem-node-id]
                                      (fn [mem-node]
-                                       (assoc mem-node :leaf-node-id leaf-node-id))))
+                                       (assoc mem-node :leaf-node-id leaf-node-id, :what-fn (:what-fn rule)))))
                         session
                         (:mem-node-ids session))
         ;; update all join nodes with:
@@ -679,6 +705,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
     (fn [v {:keys [rule-name fn-name conditions when-body then-body then-finally-body arg]}]
       (conj v `(->Rule ~rule-name
                        (mapv map->Condition ~conditions)
+                       nil
                        ~(when (some? when-body) ;; need some? because it could be `false`
                           `(fn ~fn-name [~'session ~arg] ~when-body))
                        ~(when then-body
@@ -860,14 +887,14 @@ This is no longer necessary, because it is accessible via `match` directly."}
 
 (s/fdef wrap-rule
   :args (s/cat :rule #(instance? Rule %)
-               :rule-fns ::dynamic-rule))
+               :rule-fns ::wrap-rule))
 
 (defn wrap-rule
   "Wraps the functions of a rule so they can be conveniently intercepted
   for debugging or other purposes.
   See the README section \"Debugging\"."
-  [rule {when-fn :when, then-fn :then, then-finally-fn :then-finally}]
-  (cond-> rule
+  [rule {what-fn :what, when-fn :when, then-fn :then, then-finally-fn :then-finally}]
+  (cond-> (assoc rule :what-fn what-fn)
           (and (:when-fn rule) when-fn)
           (update :when-fn
                   (fn wrap-when [f]

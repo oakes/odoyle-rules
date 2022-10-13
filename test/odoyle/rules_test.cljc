@@ -970,13 +970,18 @@
 
 ;; this shows how we can intercept all rule fns before they fire
 (deftest rule-fns
-  (let [*when? (atom false)
+  (let [*what? (atom false)
+        *when? (atom false)
         *then? (atom false)
         *then-finally? (atom false)]
     (-> (reduce o/add-rule (o/->session)
           (map (fn [rule]
                  (o/wrap-rule rule
-                              {:when
+                              {:what
+                               (fn [f session new-fact old-fact]
+                                 (reset! *what? true)
+                                 (f session new-fact old-fact))
+                               :when
                                (fn [f session match]
                                  (reset! *when? true)
                                  (f session match))
@@ -1007,6 +1012,7 @@
         (o/insert ::bob ::right-of ::alice)
         o/fire-rules
         ((fn [session]
+           (is @*what?)
            (is @*when?)
            (is @*then?)
            (is @*then-finally?)
