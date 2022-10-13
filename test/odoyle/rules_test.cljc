@@ -755,7 +755,7 @@
          session)))
   ;; make sure it correctly throws an error if a join is made in a
   ;; :what tuple that also uses a custom :then function
-  (is (thrown? Exception
+  (is (thrown? #?(:clj Exception :cljs js/Error)
                (reduce o/add-rule (o/->session)
                  (o/ruleset
                    {::rule1
