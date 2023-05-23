@@ -1018,3 +1018,35 @@
            (is @*then-finally?)
            session)))))
 
+(deftest attr-can-have-a-binding-symbol
+  (-> (reduce o/add-rule (o/->session)
+        (o/ruleset
+          {::remove-facts-with-id
+           [:what
+            [id ::remove? true]
+            [id attr value]
+            :then
+            (o/retract! id attr)]
+           ::player
+           [:what
+            [id ::color color]
+            [id ::right-of right-of]
+            [id ::height height]]}))
+      (o/insert ::alice ::remove? false)
+      (o/insert ::alice ::color "maize")
+      (o/insert ::alice ::right-of ::bob)
+      (o/insert ::alice ::height 72)
+      o/fire-rules
+      ((fn [session]
+         (is (o/contains? session ::alice ::color))
+         (is (o/contains? session ::alice ::right-of))
+         (is (o/contains? session ::alice ::height))
+         session))
+      (o/insert ::alice ::remove? true)
+      o/fire-rules
+      ((fn [session]
+         (is (not (o/contains? session ::alice ::color)))
+         (is (not (o/contains? session ::alice ::right-of)))
+         (is (not (o/contains? session ::alice ::height)))
+         session))))
+

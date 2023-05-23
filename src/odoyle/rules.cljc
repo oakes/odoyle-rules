@@ -12,7 +12,7 @@
 (s/def ::attr qualified-keyword?)
 (s/def ::value any?)
 (s/def ::what-id (s/or :binding symbol? :value ::id))
-(s/def ::what-attr (s/or :value ::attr))
+(s/def ::what-attr (s/or :binding symbol? :value ::attr))
 (s/def ::what-value (s/or :binding symbol? :value ::value))
 (s/def ::then (s/or :bool boolean? :func #(or (symbol? %) (fn? %))))
 (s/def ::what-opts (s/keys :opt-un [::then]))
@@ -274,7 +274,10 @@ This is no longer necessary, because it is accessible via `match` directly."}
             (reduced nil)
             (assoc m var-key (:id fact)))
           :attr
-          (throw (ex-info "Attributes cannot contain vars" {}))
+          (if (and (clojure.core/contains? m var-key)
+                   (not= (get m var-key) (:attr fact)))
+            (reduced nil)
+            (assoc m var-key (:attr fact)))
           :value
           (if (and (clojure.core/contains? m var-key)
                    (not= (get m var-key) (:value fact)))
@@ -459,7 +462,14 @@ This is no longer necessary, because it is accessible via `match` directly."}
     (reduce
       (fn [nodes child]
         (into nodes (get-alpha-nodes-for-fact session child id attr value false)))
-      #{}
+      ;; if the root node has successors, that means
+      ;; at least one condition had binding symbols
+      ;; in all three columns. in that case, add the
+      ;; root node to the nodes we are returning,
+      ;; because all incoming facts must go through it.
+      (if (seq (:successors alpha-node))
+        #{(:path alpha-node)}
+        #{})
       (:children alpha-node))
     (let [test-value (case (:test-field alpha-node)
                        :id id
@@ -719,7 +729,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
   "Returns a new session."
   []
   (map->Session
-    {:alpha-node (map->AlphaNode {:path nil
+    {:alpha-node (map->AlphaNode {:path [:alpha-node]
                                   :test-field nil
                                   :test-value nil
                                   :children []
