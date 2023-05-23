@@ -1026,12 +1026,7 @@
             [id ::remove? true]
             [id attr value]
             :then
-            (o/retract! id attr)]
-           ::player
-           [:what
-            [id ::color color]
-            [id ::right-of right-of]
-            [id ::height height]]}))
+            (o/retract! id attr)]}))
       (o/insert ::alice ::remove? false)
       (o/insert ::alice ::color "maize")
       (o/insert ::alice ::right-of ::bob)
