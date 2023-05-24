@@ -22,7 +22,7 @@ O'Doyle does indeed rule. And you will, too, when you use O'Doyle Rules, a rules
   - [Avoiding infinite loops](#avoiding-infinite-loops)
   - [Conditions](#conditions)
   - [Joins](#joins)
-  - [Generating ids](#generating-ids)
+  - [Bulk changes](#bulk-changes)
   - [Derived facts](#derived-facts)
   - [Serializing a session](#serializing-a-session)
   - [Performance](#performance)
@@ -71,7 +71,7 @@ Let's start by just making a rule that prints out a timestamp whenever it update
   (atom (reduce o/add-rule (o/->session) rules)))
 ```
 
-The most important part of a rule is the `:what` block, which specifies what tuples must exist for the rule to fire. The key is that you can create a *binding* in the id or value column by supplying a symbol, like `tt` above. When the rule fires, the `:then` block is executed, which has access to the bindings you created.
+The most important part of a rule is the `:what` block, which specifies what tuples must exist for the rule to fire. The key is that you can create a *binding* in any column by supplying a symbol, like `tt` above. When the rule fires, the `:then` block is executed, which has access to the bindings you created.
 
 You can then insert the time value:
 
@@ -325,9 +325,9 @@ Joins can also happen between different columns. Here, we have a rule that updat
  (o/insert! player-id ::damage (* damage strength))]
 ```
 
-## Generating ids
+## Bulk changes
 
-So far our ids have been keywords like `::player`, but you can use anything as an id. For example, if you want to spawn random enemies, you probably don't want to create a special keyword for each one. Instead, you can pass arbitrary integers as ids:
+So far our ids have been keywords like `::player`, but you can use anything as an id. For example, if you want to spawn a bunch of random enemies, you probably don't want to create a special keyword for each one. Instead, you could pass arbitrary integers as ids:
 
 ```clj
 (swap! *session
@@ -341,6 +341,46 @@ So far our ids have been keywords like `::player`, but you can use anything as a
 (o/query-all @*session ::character)
 ;; => [{:id 0, :x 14, :y 45} {:id 1, :x 12, :y 48} {:id 2, :x 48, :y 25} {:id 3, :x 4, :y 25} {:id 4, :x 39, :y 0}]
 ```
+
+How do we retract all facts associated with a character? You could of course retract them one at a time like this:
+
+```clj
+(swap! *session
+  (fn [session]
+    (-> session
+        (o/retract id ::x)
+        (o/retract id ::y)
+        o/fire-rules)))
+```
+
+Or you could make a rule that retracts them, which you trigger by inserting a fact like `[id ::remove? true]`:
+
+```clj
+::remove
+[:what
+ [id ::remove? true]
+ :then
+ (o/retract! id ::x)
+ (o/retract! id ::y)
+ (o/retract! id ::remove?)]
+```
+
+While either technique works, you have to specify every single attribute you want to retract. If we add more attributes, like `::health` or `::damage`, we have to remember to retract them too.
+
+In the latest version, O'Doyle allows you to put a binding symbol in the attribute column. This means you can actually put something like `[id attr value]` in your `:what` block. That tuple would match every single fact that is inserted.
+
+Why is that useful? Because now we can write a rule like this:
+
+```clj
+::remove
+[:what
+ [id ::remove? true]
+ [id attr      value]
+ :then
+ (o/retract! id attr)]
+```
+
+When you insert the `::remove?` fact, it will trigger this rule, and due to the join on the `id` column, it will run for every fact that has this id. This will have the effect of retracting every fact associated with that character.
 
 ## Derived facts
 
