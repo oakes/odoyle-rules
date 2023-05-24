@@ -259,7 +259,33 @@ You can add as many conditions as you want, and they will implicitly work as if 
  (o/insert! ::player ::x window-width)]
 ```
 
-Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included. Also, in the future I'll probably be able to create more optimal code because it will let me run those conditions earlier in the network.
+Using a `:when` block is better because it also affects the results of `query-all` -- matches that didn't pass the conditions will not be included.
+
+It's worth noting that if you are testing simple equality, such as this:
+
+```clj
+::kill-player
+[:what
+ [::player ::health health]
+ :when
+ (= health 0)
+ :then
+ (o/insert! ::player ::dead? true)]
+```
+
+You could also just put the literal value in the value column:
+
+```clj
+::kill-player
+[:what
+ [::player ::health 0]
+ :then
+ (o/insert! ::player ::dead? true)]
+```
+
+These aren't exactly equivalent in how they work underneath, though. Literal values are checked earlier on in the network. If the player's health isn't 0, the first example will still create the match but will prevent the rule from firing; in the second example, the match will not even be created internally.
+
+This distinction is normally not important, but it becomes important if you use `{:then false}` on tuples like this. The literal value would cause the entire match to be removed internally if it isn't equal. If it is updated later to become equal, the entire match will be recreated. This will cause the rule to fire, even if `{:then false}` is used, because the match appears to be entirely new.
 
 ## Joins
 
