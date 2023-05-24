@@ -144,7 +144,7 @@ As you can see, rules don't need a `:then` block if you're only using them to qu
         (o/insert ::player ::y 15)
         o/fire-rules)))
 
-(println (o/query-all @*session ::player))
+(o/query-all @*session ::player)
 ;; => [{:x 20, :y 15}]
 ```
 
@@ -173,7 +173,7 @@ Imagine you want to move the player's position based on its current position. So
       (o/insert ::time {::total 100 ::delta 0.1})
       o/fire-rules))
 
-(println (o/query-all @*session ::player))
+(o/query-all @*session ::player)
 ;; => [{:x 20.1, :y 15}]
 ```
 
@@ -309,7 +309,7 @@ Now we can add multiple things with those two attributes and get them back in a 
       (o/insert ::enemy {::x 5 ::y 5})
       o/fire-rules))
 
-(println (o/query-all @*session ::character))
+(o/query-all @*session ::character)
 ;; => [{:id :odoyle.readme/player, :x 20, :y 15} {:id :odoyle.readme/enemy, :x 5, :y 5}]
 ```
 
@@ -338,7 +338,7 @@ So far our ids have been keywords like `::player`, but you can use anything as a
               session
               (range 5)))))
 
-(println (o/query-all @*session ::character))
+(o/query-all @*session ::character)
 ;; => [{:id 0, :x 14, :y 45} {:id 1, :x 12, :y 48} {:id 2, :x 48, :y 25} {:id 3, :x 4, :y 25} {:id 4, :x 39, :y 0}]
 ```
 
@@ -478,7 +478,7 @@ To save a session to the disk or send it over a network, we need to serialize it
 Instead, it makes more sense to just serialize the *facts*. There is an arity of `query-all` that returns a vector of all the individual facts that were inserted:
 
 ```clj
-(println (o/query-all @*session))
+(o/query-all @*session)
 ;; => [[3 :odoyle.readme/y 42] [2 :odoyle.readme/y 39] [2 :odoyle.readme/x 37] [:odoyle.readme/derived :odoyle.readme/all-characters [{:id 1, :x 46, :y 30} {:id 2, :x 37, :y 39} {:id 3, :x 43, :y 42} {:id 4, :x 6, :y 26}]] [3 :odoyle.readme/x 43] [1 :odoyle.readme/y 30] [1 :odoyle.readme/x 46] [4 :odoyle.readme/y 26] [4 :odoyle.readme/x 6]]
 ```
 
@@ -656,8 +656,7 @@ To do this, you can instead use the `->rule` function:
     (o/insert 2 {::x 5 ::y 2})
     (o/insert 3 {::x 7 ::y -1})
     o/fire-rules
-    (o/query-all ::character)
-    println)
+    (o/query-all ::character))
 ;; => [{:id 1, :x 3, :y 1} {:id 2, :x 5, :y 2}]
 ```
 
@@ -680,9 +679,9 @@ For example, you may want to create getter rules for a variety of different thin
       (o/insert ::enemy {::x 5 ::y 5})
       o/fire-rules))
 
-(println (first (o/query-all @*session ::player)))
+(first (o/query-all @*session ::player))
 ;; => {:x 20, :y 15}
-(println (first (o/query-all @*session ::enemy)))
+(first (o/query-all @*session ::enemy))
 ;; => {:x 5, :y 5}
 ```
 
