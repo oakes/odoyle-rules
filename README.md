@@ -313,6 +313,18 @@ Now we can add multiple things with those two attributes and get them back in a 
 ;; => [{:id :odoyle.readme/player, :x 20, :y 15} {:id :odoyle.readme/enemy, :x 5, :y 5}]
 ```
 
+Joins can also happen between different columns. Here, we have a rule that updates the player's damage. The `weapon-id` is joined between the value of one tuple and the id of another. This rule will run any time the player equips a new weapon:
+
+```clj
+::update-player-damage
+[:what
+ [player-id ::weapon-id weapon-id]
+ [player-id ::strength  strength]
+ [weapon-id ::damage    damage]
+ :then
+ (o/insert! player-id ::damage (* damage strength))]
+```
+
 ## Generating ids
 
 So far our ids have been keywords like `::player`, but you can use anything as an id. For example, if you want to spawn random enemies, you probably don't want to create a special keyword for each one. Instead, you can pass arbitrary integers as ids:
