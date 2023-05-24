@@ -162,8 +162,8 @@ Imagine you want to move the player's position based on its current position. So
 
      ::move-player
      [:what
-      [::time ::delta dt]
-      [::player ::x x {:then false}] ;; don't run the :then block if only this is updated!
+      [::time   ::delta dt]
+      [::player ::x     x {:then false}] ;; don't run the :then block if only this is updated!
       :then
       (o/insert! ::player ::x (+ x dt))]}))
 
@@ -188,7 +188,7 @@ You should avoid using this feature in `:what` tuples that are part of a join. F
 ```clj
 :what
 [foo ::left-of bar {:then not=}]
-[bar ::color color]
+[bar ::color   color]
 ```
 
 If you insert a fact such as `[::alice ::left-of ::bob]` twice, you would expect the second insertion to not trigger the rule due to the `{:then not=}`, but it will. This is because updating a value that is part of a join could affect the validity of the join, so internally they can't update "in place" like usual; the match must be retracted and re-created. As a result, the `not=` condition can't be run; it's as if the match is completely new every time.
@@ -198,7 +198,7 @@ As of the latest version, adding a rule that does this will throw an exception. 
 ```clj
 :what
 [foo ::left-of bar {:then not=}]
-[baz ::color color]
+[baz ::color   color]
 :when
 (= bar baz)
 ```
@@ -223,7 +223,7 @@ Then we make the rule:
 ```clj
 ::stop-player
 [:what
- [::player ::x x]
+ [::player ::x     x]
  [::window ::width window-width]
  :then
  (when (> x window-width)
@@ -237,7 +237,7 @@ While the above code works, you can also put your condition in a special `:when`
 ```clj
 ::stop-player
 [:what
- [::player ::x x]
+ [::player ::x     x]
  [::window ::width window-width]
  :when
  (> x window-width)
@@ -250,7 +250,7 @@ You can add as many conditions as you want, and they will implicitly work as if 
 ```clj
 ::stop-player
 [:what
- [::player ::x x]
+ [::player ::x     x]
  [::window ::width window-width]
  :when
  (> x window-width)
@@ -425,7 +425,7 @@ Instead, you may be tempted to do this:
   (o/ruleset
     {::window
      [:what
-      [::window ::width window-width]
+      [::window ::width  window-width]
       [::window ::height window-height]]
 
      ::character
@@ -459,7 +459,7 @@ The solution, like is often true in software, is to pull things apart that shoul
 
      ::characters-within-window
      [:what
-      [::window ::width window-width]
+      [::window ::width  window-width]
       [::window ::height window-height]
       [::derived ::all-characters all-characters]
       :then
@@ -542,8 +542,8 @@ It turns out that a feature we've already discussed can solve this: derived fact
 
       ::move-character
       [:what
-       [::time ::delta dt]
-       [id ::character ch {:then false}]
+       [::time ::delta     dt]
+       [id     ::character ch {:then false}]
        :then
        (o/insert! id {::x (+ (:x ch) dt) ::y (+ (:y ch) dt)})]}))
 ```
