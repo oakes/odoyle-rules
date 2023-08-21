@@ -805,6 +805,20 @@ This is no longer necessary, because it is accessible via `match` directly."}
                    :attr ::attr
                    :value ::value)))
 
+(defn upsert
+  "Upserts a fact into the session. Can optionally upsert multiple facts with the same id."
+  ([session [id attr f]]
+   (upsert session id attr f))
+  ([session id attr->value]
+   (reduce-kv (fn [session attr f]
+                (upsert session id attr f))
+              session attr->value))
+  ([session id attr f]
+   (let [attr* (-> attr name keyword)
+         value (f (-> (o/query-all session id) first attr*))]
+     (->> (#'o/get-alpha-nodes-for-fact session (:alpha-node session) id attr value true)
+          (#'o/upsert-fact session id attr value)))))
+
 (s/fdef insert!
   :args ::insert!-args)
 
