@@ -709,7 +709,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
 
 (s/fdef remove-rule
   :args (s/cat :session ::session
-               :rule-name (s/? qualified-keyword?)))
+               :rule-name qualified-keyword?))
 
 (defn remove-rule
   "Removes a rule from the given session."
