@@ -707,6 +707,20 @@ This is no longer necessary, because it is accessible via `match` directly."}
         ;; assoc'ed by add-condition
         (dissoc :mem-node-ids :join-node-ids :bindings))))
 
+(s/fdef remove-rule
+  :args (s/cat :session ::session
+               :rule-name (s/? qualified-keyword?)))
+
+(defn remove-rule
+  "Removes a rule from the given session."
+  [session rule-name]
+  (if-let [node-id (get-in session [:rule-name->node-id rule-name])]
+    (-> session
+        (update :beta-nodes dissoc node-id)
+        (update :rule-name->node-id dissoc rule-name)
+        (update :node-id->rule-name dissoc node-id))
+    (throw (ex-info (str rule-name " does not exist in session") {}))))
+
 #?(:clj
  (defmacro ruleset
   "Returns a vector of rules after transforming the given map."

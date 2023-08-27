@@ -1045,3 +1045,34 @@
          (is (not (o/contains? session ::alice ::height)))
          session))))
 
+(deftest removing-a-rule
+  (let [*rule1-count (atom 0)
+        *rule2-count (atom 0)]
+    (-> (reduce o/add-rule (o/->session)
+          (o/ruleset
+            {::rule1
+             [:what
+              [id ::color color]
+              :then
+              (swap! *rule1-count inc)]
+             ::rule2
+             [:what
+              [id ::height height]
+              :then
+              (swap! *rule2-count inc)]}))
+        (o/insert ::alice ::color "red")
+        (o/insert ::bob ::height 72)
+        o/fire-rules
+        ((fn [session]
+           (is (= 1 @*rule1-count))
+           (is (= 1 @*rule2-count))
+           session))
+        (o/remove-rule ::rule2)
+        (o/insert ::alice ::color "red")
+        (o/insert ::bob ::height 72)
+        o/fire-rules
+        ((fn [session]
+           (is (= 2 @*rule1-count))
+           (is (= 1 @*rule2-count))
+           session)))))
+
