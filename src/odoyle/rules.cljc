@@ -237,7 +237,7 @@ This is no longer necessary, because it is accessible via `match` directly."}
         successor-ids (conj (:successors (get-in session alpha-node-path))
                             join-node-id)
         ;; successors must be sorted by ancestry (descendents first) to avoid duplicate rule firings
-        successor-ids (sort (partial is-ancestor session) successor-ids)]
+        successor-ids (vec (sort (partial is-ancestor session) successor-ids))]
     (-> session
         (update-in alpha-node-path assoc :successors successor-ids)
         (cond-> parent-mem-node-id
@@ -715,8 +715,20 @@ This is no longer necessary, because it is accessible via `match` directly."}
   "Removes a rule from the given session."
   [session rule-name]
   (if-let [node-id (get-in session [:rule-name->node-id rule-name])]
-    (-> session
-        (update :beta-nodes dissoc node-id)
+    (-> (loop [session session
+               node-id node-id]
+          (if node-id
+            (let [node (get-in session [:beta-nodes node-id])
+                  session (update session :beta-nodes dissoc node-id)]
+              (if (instance? JoinNode node)
+                (-> session
+                    (update-in (:alpha-node-path node)
+                               (fn [alpha-node]
+                                 (update alpha-node :successors (fn [successors]
+                                                                  (vec (remove #(= % node-id) successors))))))
+                    (recur (:parent-id node)))
+                (recur session (:parent-id node))))
+            session))
         (update :rule-name->node-id dissoc rule-name)
         (update :node-id->rule-name dissoc node-id))
     (throw (ex-info (str rule-name " does not exist in session") {}))))
