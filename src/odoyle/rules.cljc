@@ -730,7 +730,16 @@ This is no longer necessary, because it is accessible via `match` directly."}
                 (recur session (:parent-id node))))
             session))
         (update :rule-name->node-id dissoc rule-name)
-        (update :node-id->rule-name dissoc node-id))
+        (update :node-id->rule-name dissoc node-id)
+        (update :then-queue (fn [then-queue]
+                              (reduce
+                                (fn [s [id _ :as tuple]]
+                                  (if (= id node-id)
+                                    (disj s tuple)
+                                    s))
+                                then-queue
+                                then-queue)))
+        (update :then-finally-queue disj node-id))
     (throw (ex-info (str rule-name " does not exist in session") {}))))
 
 #?(:clj
