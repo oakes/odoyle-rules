@@ -1,4 +1,4 @@
-(defproject net.sekao/odoyle-rules "1.3.0"
+(defproject net.sekao/odoyle-rules "1.3.1"
   :url "https://github.com/oakes/odoyle-rules"
   :description "A rules engine for Clojure(Script)"
   :license {:name "Public Domain"
